@@ -19,7 +19,7 @@ if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Create install directory
-Write-Host "`nCreating install directory: $InstallDir"
+Write-Host "Creating install directory: $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 # Copy files
@@ -30,7 +30,7 @@ if (Test-Path $ConfigFile) {
     Copy-Item $ConfigFile -Destination "$InstallDir\config.json" -Force
     Write-Host "Config file copied."
 } else {
-    Write-Warning "config.json not found at $ConfigFile — copy it manually to $InstallDir\config.json"
+    Write-Warning "config.json not found at $ConfigFile - copy it manually to $InstallDir\config.json"
 }
 
 # Register Scheduled Task (runs at logon for any user)
@@ -54,13 +54,13 @@ Register-ScheduledTask `
     -Trigger $Trigger `
     -Settings $Settings `
     -Principal $Principal `
-    -Description "LabPulse computer lab usage monitoring agent — Walchand Institute of Technology, Solapur" | Out-Null
+    -Description "LabPulse computer lab usage monitoring agent - Walchand Institute of Technology, Solapur" | Out-Null
 
-Write-Host "`n✅ Installation complete!" -ForegroundColor Green
+Write-Host "Installation complete!" -ForegroundColor Green
 Write-Host "   Installed to  : $InstallDir"
 Write-Host "   Scheduled Task: $TaskName (runs at Windows logon)"
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Edit $InstallDir\config.json with the correct machine_id, lab_id, and api_key"
-Write-Host "  2. Log out and back in to test — the agent should start automatically"
+Write-Host "  2. Log out and back in to test - the agent should start automatically"
 Write-Host "  3. Check logs at $InstallDir\logs"
