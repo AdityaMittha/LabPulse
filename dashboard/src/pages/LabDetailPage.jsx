@@ -1,0 +1,224 @@
+import { useMemo, useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import { Monitor, Users, CheckCircle2, Clock, Activity } from "lucide-react";
+import {
+  labs, machines, sessions, appUsages, getHourlyUtilization,
+  getComplianceStats, todayStr, formatDuration
+} from "../data/mockData";
+import {
+  StatCard, ComplianceBadge, MachineStatusBadge,
+  SectionHeading, EmptyState, PageWrapper
+} from "../components/Shared";
+
+// Heatmap: hour × day
+const HOURS = ["9","10","11","12","13","14","15","16","17"];
+const DAYS  = ["MON","TUE","WED","THU","FRI"];
+
+function HeatmapCell({ value, max }) {
+  const pct = max > 0 ? value / max : 0;
+  const bg = pct === 0 ? "#F8FAFC"
+    : pct < 0.25 ? "#DBEAFE"
+    : pct < 0.5  ? "#93C5FD"
+    : pct < 0.75 ? "#3B82F6"
+    : "#1D4ED8";
+  const text = pct < 0.5 ? "#1e40af" : "#fff";
+  return (
+    <div
+      className="rounded text-center flex items-center justify-center text-xs font-medium border border-white cursor-pointer transition-all hover:scale-110 hover:shadow"
+      style={{ backgroundColor: bg, color: text, width: 36, height: 36 }}
+      title={`${value} sessions`}
+    >
+      {value || ""}
+    </div>
+  );
+}
+
+export default function LabDetailPage({ globalDate }) {
+  const { labId } = useParams();
+  const lab = labs.find(l => l.lab_id === labId);
+  const today = globalDate || todayStr();
+  const [selectedDate, setSelectedDate] = useState(today);
+
+  useEffect(() => {
+    if (globalDate) {
+      setSelectedDate(globalDate);
+    }
+  }, [globalDate]);
+
+  const labMachines = useMemo(
+    () => machines.filter(m => m.lab_id === labId),
+    [labId]
+  );
+
+  const daySessions = useMemo(
+    () => sessions.filter(s => s.lab_id === labId && s.date === selectedDate),
+    [labId, selectedDate]
+  );
+
+  const hourlyData    = useMemo(() => getHourlyUtilization(labId, selectedDate), [labId, selectedDate]);
+  const complianceSt  = useMemo(() => getComplianceStats(labId, selectedDate), [labId, selectedDate]);
+
+  // Heatmap data: sessions[day][hour]
+  const heatmapData = useMemo(() => {
+    const map = {};
+    DAYS.forEach(d => { map[d] = {}; HOURS.forEach(h => { map[d][h] = 0; }); });
+    sessions.filter(s => s.lab_id === labId).forEach(s => {
+      const dt = new Date(s.login_time);
+      const day = DAYS[dt.getDay() - 1];
+      const hour = String(dt.getHours());
+      if (day && map[day] && map[day][hour] !== undefined) map[day][hour]++;
+    });
+    return map;
+  }, [labId]);
+
+  const maxHeatVal = useMemo(() => {
+    let m = 0;
+    DAYS.forEach(d => HOURS.forEach(h => { if (heatmapData[d]?.[h] > m) m = heatmapData[d][h]; }));
+    return m || 1;
+  }, [heatmapData]);
+
+  if (!lab) {
+    return <PageWrapper><EmptyState title="Lab not found" description="This lab doesn't exist." /></PageWrapper>;
+  }
+
+  const compliancePct = complianceSt.total > 0
+    ? Math.round((complianceSt.compliant / complianceSt.total) * 100) : 0;
+
+  return (
+    <PageWrapper>
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{lab.name}</h1>
+          <p className="page-subtitle">{lab.building} · {lab.floor} Floor · {lab.department}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+            className="form-input text-xs py-1.5 w-36" max={today} />
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Sessions"         value={daySessions.length}    icon={Activity}    color="blue"  />
+        <StatCard label="Compliance"       value={`${compliancePct}%`}   icon={CheckCircle2} color="green" />
+        <StatCard label="Machines"         value={`${labMachines.filter(m=>m.status==="active").length}/${labMachines.length}`} icon={Monitor} color="purple"/>
+        <StatCard label="Compliant"        value={complianceSt.compliant} icon={Users}        color="amber" />
+      </div>
+
+      {/* Machine grid */}
+      <div className="card card-body mb-6">
+        <SectionHeading title="Machine Grid" />
+        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+          {labMachines.map(m => {
+            const mSessions = daySessions.filter(s => s.machine_id === m.machine_id);
+            const utilColor = mSessions.length === 0
+              ? "bg-slate-100 border-slate-200 text-slate-400"
+              : mSessions.length < 3
+                ? "bg-blue-100 border-blue-200 text-blue-700"
+                : "bg-primary-600 border-primary-700 text-white";
+            return (
+              <Link key={m.machine_id} to={`/machines/${m.machine_id}`}
+                className={`rounded-lg border text-center py-2 px-1 text-xs font-medium transition-all hover:scale-105 hover:shadow ${utilColor} ${m.status === "inactive" ? "opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
+                title={`${m.machine_id}: ${mSessions.length} sessions`}
+              >
+                <div className="font-mono text-[10px]">{m.machine_id.split("-").pop()}</div>
+                <div className="text-[10px] mt-0.5">{mSessions.length}s</div>
+              </Link>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-slate-100 border border-slate-200" /> Idle (0 sessions)</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-200" /> Low (1-2 sessions)</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-primary-600" /> Active (3+ sessions)</div>
+        </div>
+      </div>
+
+      {/* Hourly bar + heatmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="card card-body">
+          <SectionHeading title="Hourly Sessions" />
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+              <XAxis dataKey="hour" tick={{ fontSize: 11, fill:"#64748B" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill:"#64748B" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ border:"1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} cursor={{ fill:"#F1F5F9" }} />
+              <Bar dataKey="sessions" fill="#2563EB" radius={[4,4,0,0]} name="Sessions" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Heatmap */}
+        <div className="card card-body">
+          <SectionHeading title="Hour × Day Heatmap" />
+          <div className="overflow-x-auto">
+            <div className="inline-flex gap-2">
+              {/* Y-axis labels */}
+              <div className="flex flex-col gap-1 pt-6">
+                {HOURS.map(h => (
+                  <div key={h} className="text-xs text-slate-400 text-right pr-1 flex items-center justify-end" style={{ height: 36 }}>{h}:00</div>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                {DAYS.map(day => (
+                  <div key={day} className="flex flex-col gap-1 items-center">
+                    <div className="text-xs text-slate-500 font-medium mb-1">{day}</div>
+                    {HOURS.map(h => (
+                      <HeatmapCell key={h} value={heatmapData[day]?.[h] || 0} max={maxHeatVal} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
+            <div className="w-3 h-3 rounded" style={{background:"#F8FAFC",border:"1px solid #e2e8f0"}} /> Low
+            <div className="w-3 h-3 rounded bg-blue-200" /> Med
+            <div className="w-3 h-3 rounded bg-primary-600" /> High
+          </div>
+        </div>
+      </div>
+
+      {/* Sessions table */}
+      <div className="card">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-sm text-slate-900">Sessions — {selectedDate}</h3>
+        </div>
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Machine</th>
+                <th>Login Time</th>
+                <th>Duration</th>
+                <th>Slot</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {daySessions.length === 0
+                ? <tr><td colSpan={6} className="text-center text-slate-400 py-8">No sessions recorded for this period.</td></tr>
+                : daySessions.slice(0, 20).map(s => (
+                  <tr key={s.session_id}>
+                    <td><Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name}</Link></td>
+                    <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs hover:underline text-slate-700">{s.machine_id}</Link></td>
+                    <td className="text-slate-600 text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
+                    <td className="num">{formatDuration(s.total_duration)}</td>
+                    <td className="text-xs text-slate-500 max-w-[120px] truncate">{s.course_code}</td>
+                    <td><ComplianceBadge status={s.compliance_status} /></td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </PageWrapper>
+  );
+}

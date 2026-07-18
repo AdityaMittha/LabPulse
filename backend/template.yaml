@@ -1,0 +1,367 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  LabPulse — Centralized Privacy-Preserving Computer Lab Usage Analytics System
+  Walchand Institute of Technology, Solapur
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        TABLE_PREFIX: !Ref TablePrefix
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        SESSION_TOKEN_SECRET: !Ref SessionTokenSecret
+
+Parameters:
+  TablePrefix:
+    Type: String
+    Default: labpulse
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+  SessionTokenSecret:
+    Type: String
+    NoEcho: true
+    Default: change-me-in-production-use-secrets-manager
+
+# ── DynamoDB Tables ──────────────────────────────────────────────────────────
+Resources:
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Users"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: student_id,    AttributeType: S }
+        - { AttributeName: department,    AttributeType: S }
+        - { AttributeName: college_login, AttributeType: S }
+      KeySchema:
+        - { AttributeName: student_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_department
+          KeySchema: [{ AttributeName: department, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_college_login
+          KeySchema: [{ AttributeName: college_login, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+
+  MachinesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Machines"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: machine_id, AttributeType: S }
+        - { AttributeName: lab_id,     AttributeType: S }
+      KeySchema:
+        - { AttributeName: machine_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_lab
+          KeySchema: [{ AttributeName: lab_id, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Sessions"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: session_id,  AttributeType: S }
+        - { AttributeName: student_id,  AttributeType: S }
+        - { AttributeName: machine_id,  AttributeType: S }
+        - { AttributeName: lab_id,      AttributeType: S }
+        - { AttributeName: login_time,  AttributeType: S }
+        - { AttributeName: date,        AttributeType: S }
+      KeySchema:
+        - { AttributeName: session_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_student
+          KeySchema:
+            - { AttributeName: student_id, KeyType: HASH }
+            - { AttributeName: login_time, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_machine
+          KeySchema:
+            - { AttributeName: machine_id, KeyType: HASH }
+            - { AttributeName: login_time, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_lab_date
+          KeySchema:
+            - { AttributeName: lab_id, KeyType: HASH }
+            - { AttributeName: date,   KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
+  AppUsageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-AppUsage"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: app_usage_id, AttributeType: S }
+        - { AttributeName: session_id,   AttributeType: S }
+      KeySchema:
+        - { AttributeName: app_usage_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_session
+          KeySchema: [{ AttributeName: session_id, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+
+  BehaviorMetricsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-BehaviorMetrics"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: metric_id,  AttributeType: S }
+        - { AttributeName: session_id, AttributeType: S }
+        - { AttributeName: hour_start, AttributeType: S }
+      KeySchema:
+        - { AttributeName: metric_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_session
+          KeySchema:
+            - { AttributeName: session_id, KeyType: HASH }
+            - { AttributeName: hour_start, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
+  HourlyReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-HourlyReports"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: report_id,  AttributeType: S }
+        - { AttributeName: lab_id,     AttributeType: S }
+        - { AttributeName: date,       AttributeType: S }
+        - { AttributeName: student_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: report_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_lab_date
+          KeySchema:
+            - { AttributeName: lab_id, KeyType: HASH }
+            - { AttributeName: date,   KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_student_date
+          KeySchema:
+            - { AttributeName: student_id, KeyType: HASH }
+            - { AttributeName: date,       KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
+  TimetableTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Timetable"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: slot_id, AttributeType: S }
+        - { AttributeName: lab_id,  AttributeType: S }
+      KeySchema:
+        - { AttributeName: slot_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_lab
+          KeySchema: [{ AttributeName: lab_id, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+
+# ── Cognito User Pool ─────────────────────────────────────────────────────────
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: labpulse-users
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true  # No self-signup
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: labpulse-dashboard
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref CognitoUserPool
+      Description: Lab administrators with full access
+
+  FacultyGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: faculty
+      UserPoolId: !Ref CognitoUserPool
+      Description: Faculty members with read-only analytics access
+
+# ── HTTP API Gateway ──────────────────────────────────────────────────────────
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: v1
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - x-api-key
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
+              audience:
+                - !Ref CognitoUserPoolClient
+
+# ── Lambda Functions ───────────────────────────────────────────────────────────
+
+  ValidateStudentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/validate_student/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref SessionsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref TimetableTable }
+      Events:
+        Validate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /agent/validate
+            Method: POST
+            Auth: { Authorizer: NONE }   # Agent uses API key, not Cognito
+
+  IngestSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/ingest_summary/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref HourlyReportsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref AppUsageTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref BehaviorMetricsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
+      Events:
+        Ingest:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /agent/summary
+            Method: POST
+            Auth: { Authorizer: NONE }
+
+  SessionEndFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/session_end/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref SessionsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref BehaviorMetricsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref TimetableTable }
+      Events:
+        SessionEnd:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /agent/session-end
+            Method: POST
+            Auth: { Authorizer: NONE }
+
+  GetAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/get_analytics/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy: { TableName: !Ref SessionsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref HourlyReportsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref AppUsageTable }
+        - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
+      Events:
+        GetUsage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /analytics/usage
+            Method: GET
+        GetCompliance:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /analytics/compliance
+            Method: GET
+
+  ManageEntitiesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/manage_entities/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref TimetableTable }
+      Events:
+        Machines:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/machines
+            Method: ANY
+        Students:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/students
+            Method: ANY
+        Timetable:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/timetable
+            Method: ANY
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+Outputs:
+  ApiUrl:
+    Description: "HTTP API URL — paste into agent config.json as api_base_url"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/v1"
+
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID — for dashboard .env"
+    Value: !Ref CognitoUserPool
+
+  CognitoClientId:
+    Description: "Cognito App Client ID — for dashboard .env"
+    Value: !Ref CognitoUserPoolClient

@@ -1,0 +1,153 @@
+// Overview Dashboard — all-labs utilization summary
+import { useMemo } from "react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import {
+  Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu
+} from "lucide-react";
+import {
+  labs, machines, students, sessions, appUsages,
+  getComplianceStats, todayStr, formatDuration
+} from "../data/mockData";
+import {
+  StatCard, ComplianceBadge, SectionHeading, PageWrapper
+} from "../components/Shared";
+import { Link } from "react-router-dom";
+
+export default function OverviewPage({ globalDate }) {
+  const today = globalDate || todayStr();
+
+  const todaySessions  = useMemo(() => sessions.filter(s => s.date === today), [today]);
+  const activeMachines = machines.filter(m => m.status === "active").length;
+  const onlineNow      = Math.floor(activeMachines * 0.6);
+
+  const complianceAll = useMemo(() => {
+    const c = todaySessions.filter(s => s.compliance_status === "compliant").length;
+    return todaySessions.length > 0 ? Math.round((c / todaySessions.length) * 100) : 0;
+  }, [todaySessions]);
+
+  // Hourly utilization across all labs
+  const hourlyData = useMemo(() => {
+    return Array.from({ length: 9 }, (_, i) => {
+      const hour = i + 9;
+      const count = todaySessions.filter(s => new Date(s.login_time).getHours() === hour).length;
+      return { hour: `${hour}:00`, sessions: count };
+    });
+  }, [todaySessions]);
+
+  // Recent sessions
+  const recentSessions = useMemo(() =>
+    [...todaySessions].sort((a, b) => new Date(b.login_time) - new Date(a.login_time)).slice(0, 8),
+    [todaySessions]
+  );
+
+  // Lab utilization cards
+  const labStats = useMemo(() => labs.map(lab => {
+    const labSessions = todaySessions.filter(s => s.lab_id === lab.lab_id);
+    const labMachines = machines.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
+    const util = labMachines > 0 ? Math.min(100, Math.round((labSessions.length / (labMachines * 8)) * 100)) : 0;
+    const compliance = getComplianceStats(lab.lab_id, today);
+    return { ...lab, util, sessionCount: labSessions.length, machineCount: labMachines, compliance };
+  }), [todaySessions, today]);
+
+  return (
+    <PageWrapper>
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Overview</h1>
+          <p className="page-subtitle">All labs · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+        </div>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Sessions Today"   value={todaySessions.length}                  icon={Activity}    color="blue"   trend={12} />
+        <StatCard label="Machines Online"  value={`${onlineNow}/${activeMachines}`}      icon={Cpu}         color="green"  trend={3}  />
+        <StatCard label="Compliance Rate"  value={`${complianceAll}%`}                   icon={CheckCircle2} color="purple" trend={-2} />
+        <StatCard label="Active Students"  value={new Set(todaySessions.map(s=>s.student_id)).size} icon={Users} color="amber" trend={8} />
+      </div>
+
+      {/* Hourly bar chart */}
+      <div className="card card-body mb-6">
+        <SectionHeading title="Hourly Sessions — All Labs" />
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+            <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "#F1F5F9" }} />
+            <Bar dataKey="sessions" fill="#2563EB" radius={[4, 4, 0, 0]} name="Sessions" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Labs + Recent sessions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lab cards */}
+        <div>
+          <SectionHeading title="Labs — Today's Utilization"
+            action={<Link to="/labs" className="text-xs text-primary-600 hover:underline font-medium">View all →</Link>}
+          />
+          <div className="space-y-3">
+            {labStats.map(lab => (
+              <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
+                className="card card-body flex items-center gap-4 hover:border-primary-200 hover:shadow-md transition-all group">
+                <div className="w-9 h-9 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
+                  <FlaskConical size={18} className="text-primary-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-semibold text-sm text-slate-900 group-hover:text-primary-600 transition-colors">{lab.name}</p>
+                    <span className="text-xs font-bold text-slate-700">{lab.util}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${lab.util >= 70 ? "bg-primary-600" : lab.util >= 40 ? "bg-amber-400" : "bg-slate-300"}`}
+                      style={{ width: `${lab.util}%` }} />
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                    <span>{lab.sessionCount} sessions</span>
+                    <span>·</span>
+                    <span>{lab.machineCount} machines</span>
+                    <span>·</span>
+                    <span className="text-green-600">{lab.compliance.compliant} compliant</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent sessions */}
+        <div>
+          <SectionHeading title="Recent Sessions" />
+          <div className="card overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {recentSessions.length === 0 ? (
+                <p className="text-center text-slate-400 py-10 text-sm">No sessions yet today</p>
+              ) : recentSessions.map(s => (
+                <div key={s.session_id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
+                    {s.student_name?.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Link to={`/students/${s.student_id}`} className="text-sm font-medium text-slate-900 hover:text-primary-600 transition-colors truncate">{s.student_name}</Link>
+                      <ComplianceBadge status={s.compliance_status} />
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">{s.machine_id} · {s.course_code}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-mono text-slate-700">{formatDuration(s.total_duration)}</p>
+                    <p className="text-xs text-slate-400">{new Date(s.login_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </PageWrapper>
+  );
+}

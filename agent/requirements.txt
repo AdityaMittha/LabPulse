@@ -1,0 +1,5 @@
+pywin32==306
+psutil==5.9.8
+pynput==1.7.6
+requests==2.31.0
+pyinstaller==6.5.0

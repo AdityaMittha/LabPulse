@@ -1,0 +1,37 @@
+# Node dependencies & builds
+node_modules/
+dist/
+.env
+
+# AWS SAM build & config
+.aws-sam/
+samconfig.toml
+changeset_details.json
+
+# Generated API keys & secrets
+machine_api_keys.json
+
+# Python caching & envs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Editor / IDE config
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db

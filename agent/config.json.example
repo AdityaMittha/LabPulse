@@ -1,0 +1,13 @@
+{
+  "machine_id": "LAB1-PC-01",
+  "lab_id": "LAB1",
+  "lab_name": "CS Lab 1",
+  "college_name": "Walchand Institute of Technology, Solapur",
+  "api_base_url": "https://YOUR_API_GATEWAY_URL/v1",
+  "api_key": "YOUR_MACHINE_API_KEY",
+  "idle_threshold_seconds": 60,
+  "summary_interval_minutes": 60,
+  "retry_interval_minutes": 5,
+  "max_validate_attempts": 3,
+  "log_level": "INFO"
+}
