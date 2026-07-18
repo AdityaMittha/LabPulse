@@ -1,5 +1,4 @@
-// Overview Dashboard — all-labs utilization summary
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -7,20 +6,44 @@ import {
   Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu
 } from "lucide-react";
 import {
-  labs, machines, students, sessions, appUsages,
-  getComplianceStats, todayStr, formatDuration
+  labs, getComplianceStats, todayStr, formatDuration
 } from "../data/mockData";
 import {
   StatCard, ComplianceBadge, SectionHeading, PageWrapper
 } from "../components/Shared";
 import { Link } from "react-router-dom";
+import { fetchUsage, fetchMachines } from "../api/apiClient";
 
 export default function OverviewPage({ globalDate }) {
   const today = globalDate || todayStr();
+  const [sessionsData, setSessionsData] = useState([]);
+  const [machinesData, setMachinesData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const todaySessions  = useMemo(() => sessions.filter(s => s.date === today), [today]);
-  const activeMachines = machines.filter(m => m.status === "active").length;
-  const onlineNow      = Math.floor(activeMachines * 0.6);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    
+    Promise.all([
+      fetchUsage({ date: today }),
+      fetchMachines()
+    ]).then(([sess, machs]) => {
+      if (active) {
+        setSessionsData(sess || []);
+        setMachinesData(machs || []);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error(err);
+      if (active) setLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [today]);
+
+  const todaySessions  = sessionsData;
+  const activeMachines = machinesData.filter(m => m.status === "active").length;
+  const onlineNow      = Math.min(activeMachines, Math.max(1, Math.floor(activeMachines * 0.6)));
 
   const complianceAll = useMemo(() => {
     const c = todaySessions.filter(s => s.compliance_status === "compliant").length;
@@ -31,7 +54,10 @@ export default function OverviewPage({ globalDate }) {
   const hourlyData = useMemo(() => {
     return Array.from({ length: 9 }, (_, i) => {
       const hour = i + 9;
-      const count = todaySessions.filter(s => new Date(s.login_time).getHours() === hour).length;
+      const count = todaySessions.filter(s => {
+        const d = new Date(s.login_time);
+        return d.getHours() === hour || d.getUTCHours() + 5.5 === hour; // handle both UTC and local timezone
+      }).length;
       return { hour: `${hour}:00`, sessions: count };
     });
   }, [todaySessions]);
@@ -45,11 +71,24 @@ export default function OverviewPage({ globalDate }) {
   // Lab utilization cards
   const labStats = useMemo(() => labs.map(lab => {
     const labSessions = todaySessions.filter(s => s.lab_id === lab.lab_id);
-    const labMachines = machines.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
+    const labMachines = machinesData.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
     const util = labMachines > 0 ? Math.min(100, Math.round((labSessions.length / (labMachines * 8)) * 100)) : 0;
     const compliance = getComplianceStats(lab.lab_id, today);
     return { ...lab, util, sessionCount: labSessions.length, machineCount: labMachines, compliance };
-  }), [todaySessions, today]);
+  }), [todaySessions, machinesData, today]);
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur lab utilization stats...</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

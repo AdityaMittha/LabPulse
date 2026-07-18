@@ -1,8 +1,9 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardCheck, Search } from "lucide-react";
-import { labs, timetable, sessions, students, todayStr } from "../data/mockData";
+import { labs, todayStr } from "../data/mockData";
 import { ComplianceBadge, SectionHeading, PageWrapper, StatCard } from "../components/Shared";
+import { fetchTimetable, fetchUsage, fetchStudents } from "../api/apiClient";
 
 export default function CompliancePage({ globalDate }) {
   const today = globalDate || todayStr();
@@ -11,41 +12,61 @@ export default function CompliancePage({ globalDate }) {
   const [selectedSlot, setSelectedSlot] = useState("");
   const [search,       setSearch]       = useState("");
 
+  const [timetableData, setTimetableData] = useState([]);
+  const [sessionsData, setSessionsData] = useState([]);
+  const [studentsData, setStudentsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     if (globalDate) {
       setSelectedDate(globalDate);
     }
   }, [globalDate]);
 
-  const labSlots = useMemo(
-    () => timetable.filter(t => t.lab_id === selectedLab),
-    [selectedLab]
-  );
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
 
-  const daySessions = useMemo(
-    () => sessions.filter(s => s.lab_id === selectedLab && s.date === selectedDate),
-    [selectedLab, selectedDate]
-  );
+    Promise.all([
+      fetchTimetable(selectedLab),
+      fetchUsage({ lab_id: selectedLab, date: selectedDate }),
+      fetchStudents()
+    ]).then(([tt, sess, studs]) => {
+      if (active) {
+        setTimetableData(tt || []);
+        setSessionsData(sess || []);
+        setStudentsData(studs || []);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error(err);
+      if (active) setLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [selectedLab, selectedDate]);
+
+  const labSlots = timetableData;
+  const daySessions = sessionsData;
 
   // Build compliance rows
   const rows = useMemo(() => {
-    const slot = selectedSlot ? timetable.find(t => t.slot_id === selectedSlot) : null;
+    const slot = selectedSlot ? timetableData.find(t => t.slot_id === selectedSlot) : null;
     const matchSessions = slot
       ? daySessions.filter(s => s.timetable_slot === slot.slot_id)
       : daySessions;
 
     // Get unique students in these sessions
-    const seen = new Set();
     const result = matchSessions.map(s => {
-      seen.add(s.student_id);
+      const stud = studentsData.find(st => st.student_id === s.student_id);
       return {
         student_id: s.student_id,
-        student_name: s.student_name,
+        student_name: stud ? stud.name : s.student_name || "Unknown Student",
         machine_id: s.machine_id,
         login_time: s.login_time,
         total_duration: s.total_duration,
         compliance_status: s.compliance_status,
-        course_code: s.course_code,
+        course_code: s.course_code || (slot ? slot.course_code : ""),
         timetable_slot: s.timetable_slot,
       };
     });
@@ -57,7 +78,7 @@ export default function CompliancePage({ globalDate }) {
     );
 
     return filtered;
-  }, [daySessions, selectedSlot, search]);
+  }, [daySessions, timetableData, studentsData, selectedSlot, search]);
 
   const compCounts = useMemo(() => ({
     compliant:     rows.filter(r => r.compliance_status === "compliant").length,
@@ -67,6 +88,19 @@ export default function CompliancePage({ globalDate }) {
 
   const compliancePct = rows.length > 0
     ? Math.round((compCounts.compliant / rows.length) * 100) : 0;
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur compliance data...</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

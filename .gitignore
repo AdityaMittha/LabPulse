@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .env
+dashboard/public/labpulse-agent.zip
 
 # AWS SAM build & config
 .aws-sam/
@@ -35,3 +36,12 @@ pip-delete-this-directory.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# Agent build artifacts
+agent/build/
+agent/dist/
+agent/labpulse.spec
+agent/config.json
+agent/offline_queue.db
+agent/logs/
+test_api.py

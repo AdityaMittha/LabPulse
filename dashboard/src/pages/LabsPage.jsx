@@ -1,15 +1,40 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FlaskConical, Cpu, Users, TrendingUp } from "lucide-react";
-import { labs, machines, sessions, getComplianceStats, todayStr } from "../data/mockData";
+import { labs, getComplianceStats, todayStr } from "../data/mockData";
 import { StatCard, UtilBar, PageWrapper, SectionHeading } from "../components/Shared";
+import { fetchUsage, fetchMachines } from "../api/apiClient";
 
 export default function LabsPage({ globalDate }) {
   const today = globalDate || todayStr();
+  const [sessionsData, setSessionsData] = useState([]);
+  const [machinesData, setMachinesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    Promise.all([
+      fetchUsage({ date: today }),
+      fetchMachines()
+    ]).then(([sess, machs]) => {
+      if (active) {
+        setSessionsData(sess || []);
+        setMachinesData(machs || []);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error(err);
+      if (active) setLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [today]);
 
   const labStats = useMemo(() => labs.map(lab => {
-    const labSessions = sessions.filter(s => s.lab_id === lab.lab_id && s.date === today);
-    const labMachines = machines.filter(m => m.lab_id === lab.lab_id);
+    const labSessions = sessionsData.filter(s => s.lab_id === lab.lab_id);
+    const labMachines = machinesData.filter(m => m.lab_id === lab.lab_id);
     const activeMachines = labMachines.filter(m => m.status === "active").length;
     const util = activeMachines > 0
       ? Math.min(100, Math.round((labSessions.length / (activeMachines * 8)) * 100))
@@ -25,7 +50,20 @@ export default function LabsPage({ globalDate }) {
       compliancePct,
       comp,
     };
-  }), [today]);
+  }), [sessionsData, machinesData, today]);
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur labs list...</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   const totalSessions    = labStats.reduce((a, l) => a + l.sessionCount, 0);
   const totalActiveMach  = labStats.reduce((a, l) => a + l.activeMachines, 0);

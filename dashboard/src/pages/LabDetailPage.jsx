@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { Monitor, Users, CheckCircle2, Clock, Activity } from "lucide-react";
 import {
-  labs, machines, sessions, appUsages, getHourlyUtilization,
+  labs, appUsages, getHourlyUtilization,
   getComplianceStats, todayStr, formatDuration
 } from "../data/mockData";
 import {
@@ -36,11 +36,17 @@ function HeatmapCell({ value, max }) {
   );
 }
 
+import { fetchUsage, fetchMachines } from "../api/apiClient";
+
 export default function LabDetailPage({ globalDate }) {
   const { labId } = useParams();
   const lab = labs.find(l => l.lab_id === labId);
   const today = globalDate || todayStr();
   const [selectedDate, setSelectedDate] = useState(today);
+  const [machinesData, setMachinesData] = useState([]);
+  const [sessionsData, setSessionsData] = useState([]);
+  const [allLabSessions, setAllLabSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (globalDate) {
@@ -48,37 +54,82 @@ export default function LabDetailPage({ globalDate }) {
     }
   }, [globalDate]);
 
-  const labMachines = useMemo(
-    () => machines.filter(m => m.lab_id === labId),
-    [labId]
-  );
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
 
-  const daySessions = useMemo(
-    () => sessions.filter(s => s.lab_id === labId && s.date === selectedDate),
-    [labId, selectedDate]
-  );
+    Promise.all([
+      fetchMachines(labId),
+      fetchUsage({ lab_id: labId, date: selectedDate }),
+      fetchUsage({ lab_id: labId }) // for heatmap
+    ]).then(([machs, sess, allSess]) => {
+      if (active) {
+        setMachinesData(machs || []);
+        setSessionsData(sess || []);
+        setAllLabSessions(allSess || []);
+        setLoading(false);
+      }
+    }).catch(err => {
+      console.error(err);
+      if (active) setLoading(false);
+    });
 
-  const hourlyData    = useMemo(() => getHourlyUtilization(labId, selectedDate), [labId, selectedDate]);
-  const complianceSt  = useMemo(() => getComplianceStats(labId, selectedDate), [labId, selectedDate]);
+    return () => { active = false; };
+  }, [labId, selectedDate]);
+
+  const labMachines = machinesData;
+  const daySessions = sessionsData;
+
+  const hourlyData = useMemo(() => {
+    return Array.from({ length: 9 }, (_, i) => {
+      const hour = i + 9;
+      const count = daySessions.filter(s => {
+        const d = new Date(s.login_time);
+        return d.getHours() === hour || d.getUTCHours() + 5.5 === hour;
+      }).length;
+      return { hour: `${hour}:00`, sessions: count };
+    });
+  }, [daySessions]);
+
+  const complianceSt = useMemo(() => {
+    const total = daySessions.length;
+    const compliant = daySessions.filter(s => s.compliance_status === "compliant").length;
+    const partial = daySessions.filter(s => s.compliance_status === "partial").length;
+    const non_compliant = daySessions.filter(s => s.compliance_status === "non_compliant").length;
+    return { total, compliant, partial, non_compliant };
+  }, [daySessions]);
 
   // Heatmap data: sessions[day][hour]
   const heatmapData = useMemo(() => {
     const map = {};
     DAYS.forEach(d => { map[d] = {}; HOURS.forEach(h => { map[d][h] = 0; }); });
-    sessions.filter(s => s.lab_id === labId).forEach(s => {
+    allLabSessions.forEach(s => {
       const dt = new Date(s.login_time);
       const day = DAYS[dt.getDay() - 1];
       const hour = String(dt.getHours());
       if (day && map[day] && map[day][hour] !== undefined) map[day][hour]++;
     });
     return map;
-  }, [labId]);
+  }, [allLabSessions]);
 
   const maxHeatVal = useMemo(() => {
     let m = 0;
     DAYS.forEach(d => HOURS.forEach(h => { if (heatmapData[d]?.[h] > m) m = heatmapData[d][h]; }));
     return m || 1;
   }, [heatmapData]);
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur lab details...</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   if (!lab) {
     return <PageWrapper><EmptyState title="Lab not found" description="This lab doesn't exist." /></PageWrapper>;

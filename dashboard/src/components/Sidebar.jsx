@@ -5,7 +5,7 @@ import { COLLEGE } from "../data/mockData";
 import {
   LayoutDashboard, FlaskConical, Monitor, Users,
   ClipboardCheck, FileBarChart2, Settings, LogOut,
-  ChevronRight, Cpu, BookOpen
+  ChevronRight, Cpu, BookOpen, Download
 } from "lucide-react";
 
 const navItems = [
@@ -104,6 +104,20 @@ export default function Sidebar({ collapsed, onCollapse }) {
                 )
                 : <NavItem key={item.to} {...item} />
             ))}
+
+            {/* Download Agent Button */}
+            {collapsed ? (
+              <a href="/labpulse-agent.zip" download title="Download Windows Agent (.zip)"
+                className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto text-primary-600 hover:bg-primary-50 transition-all mt-4 border border-dashed border-primary-200">
+                <Download size={18} />
+              </a>
+            ) : (
+              <a href="/labpulse-agent.zip" download
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-primary-600 bg-primary-50 border border-dashed border-primary-200 hover:bg-primary-100 transition-all mt-4">
+                <Download size={16} className="shrink-0" />
+                <span className="truncate">Download Agent Pack</span>
+              </a>
+            )}
           </>
         )}
       </nav>
