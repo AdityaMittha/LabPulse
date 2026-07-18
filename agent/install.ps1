@@ -63,4 +63,4 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Edit $InstallDir\config.json with the correct machine_id, lab_id, and api_key"
 Write-Host "  2. Log out and back in to test — the agent should start automatically"
-Write-Host "  3. Check logs at $InstallDir\logs\"
+Write-Host "  3. Check logs at $InstallDir\logs"
