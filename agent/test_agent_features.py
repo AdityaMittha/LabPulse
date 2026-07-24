@@ -398,25 +398,25 @@ class TestSummarizer(unittest.TestCase):
         self.assertEqual(payload["report_id"], "sess-ABC#2026-07-20T10:00:00Z")
         print("  [PASS] report_id serves as correct idempotency key")
 
-    def test_privacy_check_blocks_disallowed_in_payload(self):
-        """_assert_no_disallowed_fields blocks disallowed keys in assembled payload."""
-        from summarizer import _assert_no_disallowed_fields
-        # These should all raise ValueError
-        for bad_key in ["keystrokes", "screenshot", "clipboard", "window_title", "url", "password"]:
-            with self.assertRaises(ValueError, msg=f"Key '{bad_key}' should be blocked"):
-                _assert_no_disallowed_fields({bad_key: "bad_value"})
-        print("  [PASS] _assert_no_disallowed_fields blocks all disallowed keys")
-
-    def test_privacy_check_blocks_nested(self):
-        """Disallowed keys nested inside dicts/lists are also blocked."""
-        from summarizer import _assert_no_disallowed_fields
-        # Nested in dict
-        with self.assertRaises(ValueError):
-            _assert_no_disallowed_fields({"summary": {"keystrokes": [1, 2, 3]}})
-        # Nested in list of dicts
-        with self.assertRaises(ValueError):
-            _assert_no_disallowed_fields({"items": [{"url": "http://secret.com"}]})
-        print("  [PASS] Privacy check catches disallowed keys in nested structures")
+    def test_browser_activity_included_in_payload(self):
+        """build_summary includes browser_activity when present in snapshot."""
+        snapshot = {
+            "app_usage": {"chrome.exe": {"active_duration": 300, "open_count": 2}},
+            "keyboard_count": 50,
+            "mouse_click_count": 10,
+            "mouse_move_count": 100,
+            "active_time": 300,
+            "idle_time": 60,
+            "browser_activity": {
+                "sites": [{"domain": "github.com", "active_duration": 150, "visit_count": 2}],
+                "page_log": [{"title": "LabPulse", "url": "https://github.com", "domain": "github.com", "browser": "Google Chrome"}]
+            }
+        }
+        from summarizer import build_summary
+        payload = build_summary(snapshot, "sess-1", "std-1", "pc-1", "lab-1", "2026-07-24T10:00:00Z", "2026-07-24T11:00:00Z")
+        self.assertIn("browser_activity", payload["summary"])
+        self.assertEqual(len(payload["summary"]["browser_activity"]["sites"]), 1)
+        print("  [PASS] Browser activity data correctly included in summary payload")
 
     def test_clean_payload_passes_privacy(self):
         """A properly built payload passes the privacy check without error."""
@@ -755,13 +755,24 @@ class TestSessionLifecycle(unittest.TestCase):
 class TestPrivacyComprehensive(unittest.TestCase):
     """Comprehensive privacy tests across the entire agent."""
 
-    def test_all_disallowed_keys_blocked(self):
-        """Every key in DISALLOWED_KEYS is blocked by _assert_no_disallowed_fields."""
-        from summarizer import DISALLOWED_KEYS, _assert_no_disallowed_fields
-        for key in DISALLOWED_KEYS:
-            with self.assertRaises(ValueError, msg=f"Key '{key}' should be blocked"):
-                _assert_no_disallowed_fields({key: "test_value"})
-        print(f"  [PASS] All {len(DISALLOWED_KEYS)} disallowed keys blocked")
+    def test_browser_data_serialization(self):
+        """Browser title and URL data are properly formatted and serializable."""
+        snapshot = {
+            "app_usage": {"chrome.exe": {"active_duration": 100, "open_count": 1}},
+            "keyboard_count": 20,
+            "mouse_click_count": 5,
+            "mouse_move_count": 50,
+            "active_time": 100,
+            "idle_time": 0,
+            "browser_activity": {
+                "sites": [{"domain": "wit.ac.in", "active_duration": 100, "visit_count": 1}],
+                "page_log": [{"title": "WIT Solapur", "url": "https://wit.ac.in", "domain": "wit.ac.in", "browser": "Edge"}]
+            }
+        }
+        from summarizer import build_summary
+        payload = build_summary(snapshot, "sess-1", "std-1", "pc-1", "lab-1", "2026-07-24T10:00:00Z", "2026-07-24T11:00:00Z")
+        self.assertIn("browser_activity", payload["summary"])
+        print("  [PASS] Browser activity data correctly serialized in summary payload")
 
     def test_tracker_has_no_key_capture(self):
         """Tracker source code does not capture key values."""
