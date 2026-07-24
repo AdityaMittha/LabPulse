@@ -5,7 +5,7 @@ import { PageWrapper, StatCard } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { deleteStudent } from "../api/apiClient";
 
-const DEPTS = ["CSE", "IT", "E&TC", "MECH"];
+const DEPTS = ["CSE", "IT", "E&TC"];
 const YEARS = ["FE", "SE", "TE", "BE"];
 const YEAR_LABELS = { FE: "First Year", SE: "Second Year", TE: "Third Year", BE: "Final Year" };
 
@@ -13,7 +13,6 @@ const DEPT_COLORS = {
   CSE:    { bg: "bg-blue-50",   border: "border-blue-200",  accent: "bg-blue-600",   text: "text-blue-700",   badge: "bg-blue-100 text-blue-700",   ring: "ring-blue-200" },
   IT:     { bg: "bg-emerald-50", border: "border-emerald-200", accent: "bg-emerald-600", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700", ring: "ring-emerald-200" },
   "E&TC": { bg: "bg-amber-50",  border: "border-amber-200", accent: "bg-amber-600",  text: "text-amber-700",  badge: "bg-amber-100 text-amber-700",  ring: "ring-amber-200" },
-  MECH:   { bg: "bg-purple-50", border: "border-purple-200", accent: "bg-purple-600", text: "text-purple-700", badge: "bg-purple-100 text-purple-700", ring: "ring-purple-200" },
 };
 
 const YEAR_COLORS = {

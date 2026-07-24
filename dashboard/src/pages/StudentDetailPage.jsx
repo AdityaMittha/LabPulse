@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { User, Clock, Monitor, CheckCircle2, Activity } from "lucide-react";
-import { students, sessions, appUsages, behaviorMetrics, labs, machines, todayStr, formatDuration } from "../data/mockData";
+import { User, Clock, Monitor, CheckCircle2, Activity, Globe, ExternalLink } from "lucide-react";
+import { students, sessions, appUsages, behaviorMetrics, labs, machines, todayStr, formatDuration, getStudentBrowserActivity } from "../data/mockData";
 import { StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
 import { deleteStudent } from "../api/apiClient";
 
@@ -51,6 +51,9 @@ export default function StudentDetailPage() {
       .slice(0, 5);
   }, [studentSessions]);
 
+  // Browser activity
+  const browserData = useMemo(() => getStudentBrowserActivity(studentId), [studentId]);
+
   if (!student) {
     return <PageWrapper><EmptyState title="Student not found" description="This student ID doesn't exist in the system." /></PageWrapper>;
   }
@@ -75,7 +78,7 @@ export default function StudentDetailPage() {
         <StatCard label="Total Sessions"    value={studentSessions.length}     icon={Activity}    color="blue"   />
         <StatCard label="Total Lab Time"    value={formatDuration(totalTime)}  icon={Clock}       color="green"  />
         <StatCard label="Compliance Rate"   value={`${compliancePct}%`}        icon={CheckCircle2} color="purple" />
-        <StatCard label="Dept"             value={student.department}          icon={User}         color="amber"  />
+        <StatCard label="Sites Visited"     value={browserData.sites.length}   icon={Globe}        color="amber"  />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -140,6 +143,69 @@ export default function StudentDetailPage() {
                 })
               }
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Browser Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Top Sites */}
+        <div className="card card-body">
+          <SectionHeading title="Top Websites Visited" />
+          <div className="space-y-2.5">
+            {browserData.sites.length === 0
+              ? <p className="text-sm text-slate-400 text-center py-4">No browser data</p>
+              : browserData.sites.map((site, i) => {
+                const maxDur = browserData.sites[0].active_duration;
+                return (
+                  <div key={site.domain} className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 w-4 shrink-0">{i+1}</span>
+                    <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span className="text-sm text-slate-800 flex-1 truncate font-medium">{site.domain}</span>
+                    <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-mono text-slate-500 w-12 text-right shrink-0">{formatDuration(site.active_duration)}</span>
+                    <span className="text-[10px] text-slate-400 w-8 text-right shrink-0">{site.visit_count}×</span>
+                  </div>
+                );
+              })
+            }
+          </div>
+        </div>
+
+        {/* Recent Page Log */}
+        <div className="card card-body">
+          <SectionHeading title="Recent Page Visits" />
+          <div className="space-y-2">
+            {browserData.page_log.length === 0
+              ? <p className="text-sm text-slate-400 text-center py-4">No page log data</p>
+              : browserData.page_log.slice(0, 10).map((entry, i) => (
+                <div key={i} className="flex items-start gap-2.5 py-1.5 border-b border-slate-50 last:border-0">
+                  <div className="w-5 h-5 rounded bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <Globe className="w-3 h-3 text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-800 truncate font-medium">{entry.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-blue-600 truncate max-w-[180px]">{entry.domain}</span>
+                      <span className="text-[10px] text-slate-400">·</span>
+                      <span className="text-[10px] text-slate-400">{entry.browser}</span>
+                      <span className="text-[10px] text-slate-400">·</span>
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(entry.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  </div>
+                  {entry.url && (
+                    <a href={entry.url} target="_blank" rel="noopener noreferrer"
+                       className="text-slate-300 hover:text-blue-500 transition-colors shrink-0 mt-1">
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              ))
+            }
           </div>
         </div>
       </div>

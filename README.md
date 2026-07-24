@@ -114,11 +114,11 @@ npm run dev
 
 ---
 
-## 🔒 Privacy & Compliance Guarantees
+## 🔒 Privacy & Security Features
 
-LabPulse is built specifically for college lab computer utilization metrics and guarantees **100% student privacy compliance**:
-* ❌ **Never recorded**: Key values (passwords, code content), window text, URLs, clipboard data, or screenshots.
-* ✅ **Recorded**: Keystroke count (increment counter only), mouse click count, mouse movement count, foreground application executable names (e.g., `code.exe`, `chrome.exe`), active/idle durations, and session login/logout timestamps.
+LabPulse provides structured lab utilization analytics and browser activity insights:
+* ❌ **Never recorded**: Individual keypress characters (passwords, raw text), clipboard data, or screen captures.
+* ✅ **Recorded**: Application executables (`code.exe`, `chrome.exe`), active/idle durations, keyboard/mouse input counts, browser window/tab titles, page URLs, domain visit stats, and session login/logout timestamps.
 * 🔒 **Data Encryption**: All communication channels are enforced over HTTPS. Database tables are encrypted at rest using AWS KMS keys.
 
 ---

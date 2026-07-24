@@ -3,6 +3,7 @@ get_analytics/handler.py — Lambda: query analytics data for the dashboard.
 Walchand Institute of Technology, Solapur — LabPulse Backend
 
 Supports filters: lab_id, machine_id, student_id, date, date_from, date_to, slot
+Routes: /analytics/usage, /analytics/compliance, /analytics/browser
 """
 import json
 import os
@@ -12,9 +13,10 @@ from boto3.dynamodb.conditions import Key, Attr
 TABLE_PREFIX = os.environ.get("TABLE_PREFIX", "labpulse")
 dynamodb = boto3.resource("dynamodb")
 
-sessions_table      = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
-hourly_reports_table = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
-app_usage_table     = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
+sessions_table          = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
+hourly_reports_table    = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
+app_usage_table         = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
+browser_activity_table  = dynamodb.Table(f"{TABLE_PREFIX}-BrowserActivity")
 
 
 def _cors(body, code=200):
@@ -34,6 +36,8 @@ def lambda_handler(event, context):
 
     if "/compliance" in path:
         return _get_compliance(qs)
+    elif "/browser" in path:
+        return _get_browser(qs)
     else:
         return _get_usage(qs)
 
@@ -116,4 +120,86 @@ def _get_compliance(qs: dict):
         "compliant": compliant, "partial": partial, "non_compliant": non_compliant,
         "compliance_pct": round((compliant / len(items)) * 100) if items else 0,
         "sessions": items,
+    })
+
+
+def _get_browser(qs: dict):
+    """Return browser activity data filtered by session_id, student_id, or lab_id+date."""
+    session_id = qs.get("session_id")
+    student_id = qs.get("student_id")
+    lab_id     = qs.get("lab_id")
+    date       = qs.get("date")
+    limit      = int(qs.get("limit", 100))
+
+    items = []
+    if session_id:
+        resp = browser_activity_table.query(
+            IndexName="by_session",
+            KeyConditionExpression=Key("session_id").eq(session_id),
+            Limit=limit,
+        )
+        items = resp.get("Items", [])
+    elif student_id and date:
+        resp = browser_activity_table.query(
+            IndexName="by_student_date",
+            KeyConditionExpression=Key("student_id").eq(student_id) & Key("date").eq(date),
+            Limit=limit,
+        )
+        items = resp.get("Items", [])
+    elif lab_id and date:
+        resp = browser_activity_table.query(
+            IndexName="by_lab_date",
+            KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").eq(date),
+            Limit=limit,
+        )
+        items = resp.get("Items", [])
+    elif student_id:
+        resp = browser_activity_table.query(
+            IndexName="by_student_date",
+            KeyConditionExpression=Key("student_id").eq(student_id),
+            Limit=limit,
+            ScanIndexForward=False,
+        )
+        items = resp.get("Items", [])
+    else:
+        return _cors({"error": "Provide session_id, student_id, or lab_id+date"}, 400)
+
+    # Parse stored JSON for each item
+    results = []
+    for item in items:
+        entry = {
+            "activity_id": item.get("activity_id"),
+            "session_id":  item.get("session_id"),
+            "student_id":  item.get("student_id"),
+            "lab_id":      item.get("lab_id"),
+            "date":        item.get("date"),
+            "hour_start":  item.get("hour_start"),
+        }
+        try:
+            entry["sites"] = json.loads(item.get("sites_json", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            entry["sites"] = []
+        try:
+            entry["page_log"] = json.loads(item.get("page_log_json", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            entry["page_log"] = []
+        results.append(entry)
+
+    # Aggregate top sites across all returned activity records
+    site_totals = {}
+    for r in results:
+        for site in r.get("sites", []):
+            domain = site.get("domain", "")
+            if domain:
+                if domain not in site_totals:
+                    site_totals[domain] = {"domain": domain, "active_duration": 0, "visit_count": 0}
+                site_totals[domain]["active_duration"] += site.get("active_duration", 0)
+                site_totals[domain]["visit_count"] += site.get("visit_count", 0)
+
+    top_sites = sorted(site_totals.values(), key=lambda x: x["active_duration"], reverse=True)
+
+    return _cors({
+        "activities": results,
+        "top_sites": top_sites[:20],
+        "count": len(results),
     })

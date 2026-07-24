@@ -1,6 +1,6 @@
 """
 summarizer.py — Hourly summary generation for the LabPulse agent.
-Wraps tracker snapshot into the privacy-safe JSON payload for AWS ingestion.
+Wraps tracker snapshot into the JSON payload for AWS ingestion.
 Walchand Institute of Technology, Solapur
 """
 import logging
@@ -24,10 +24,10 @@ def build_summary(
     Build the hourly summary payload from a tracker snapshot.
     This is the JSON that gets POSTed to /v1/agent/summary.
 
-    Privacy rules enforced here:
-      - Only app names and durations (no window titles, no URLs)
-      - Only input counts (no key values, no text)
-      - No screenshots, no clipboard
+    Includes:
+      - App names and durations
+      - Input counts (no key values, no text)
+      - Browser activity: per-site durations, page titles, URLs
     """
     # Sort apps by active_duration descending
     apps_sorted = sorted(
@@ -35,6 +35,11 @@ def build_summary(
         key=lambda x: x[1]["active_duration"],
         reverse=True,
     )
+
+    # Browser activity data (may be empty if no browser was used)
+    browser_activity = tracker_snapshot.get("browser_activity", {})
+    browser_sites = browser_activity.get("sites", [])
+    browser_page_log = browser_activity.get("page_log", [])
 
     payload = {
         "report_id": f"{session_id}#{hour_start}",   # idempotency key
@@ -62,33 +67,16 @@ def build_summary(
                 "active_time": tracker_snapshot["active_time"],
                 "idle_time": tracker_snapshot["idle_time"],
             },
+            "browser_activity": {
+                "sites": browser_sites,
+                "page_log": browser_page_log,
+            },
         },
-        "agent_version": "1.0.0",
+        "agent_version": "1.1.0",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
-    # Paranoia check: ensure no disallowed fields sneak in
-    _assert_no_disallowed_fields(payload)
     return payload
-
-
-DISALLOWED_KEYS = {
-    "password", "keystrokes", "key_values", "raw_keys",
-    "screenshot", "clipboard", "window_title", "url",
-}
-
-
-def _assert_no_disallowed_fields(obj, path=""):
-    """Recursively assert no disallowed keys exist in the payload."""
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            full_key = f"{path}.{k}" if path else k
-            if k.lower() in DISALLOWED_KEYS:
-                raise ValueError(f"PRIVACY VIOLATION: disallowed field '{full_key}' in payload!")
-            _assert_no_disallowed_fields(v, full_key)
-    elif isinstance(obj, list):
-        for i, item in enumerate(obj):
-            _assert_no_disallowed_fields(item, f"{path}[{i}]")
 
 
 def hour_boundary(dt_struct=None) -> tuple[str, str]:

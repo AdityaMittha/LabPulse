@@ -3,23 +3,24 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu
+  Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu, Globe
 } from "lucide-react";
 import {
-  labs, getComplianceStats, todayStr, formatDuration
+  labs, getComplianceStats, todayStr, formatDuration, getTopSites
 } from "../data/mockData";
 import {
   StatCard, ComplianceBadge, SectionHeading, PageWrapper
 } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchUsage, fetchMachines } from "../api/apiClient";
+import { fetchUsage, fetchMachines, fetchTopSites } from "../api/apiClient";
 
 export default function OverviewPage({ globalDate }) {
   const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
   const [sessionsData, setSessionsData] = useState([]);
   const [machinesData, setMachinesData] = useState([]);
+  const [topSitesData, setTopSitesData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,11 +29,13 @@ export default function OverviewPage({ globalDate }) {
     
     Promise.all([
       fetchUsage({ date: today }),
-      fetchMachines()
-    ]).then(([sess, machs]) => {
+      fetchMachines(),
+      fetchTopSites("", today)
+    ]).then(([sess, machs, sites]) => {
       if (active) {
         setSessionsData(sess || []);
         setMachinesData(machs || []);
+        setTopSitesData(sites || []);
         setLoading(false);
       }
     }).catch(err => {
@@ -138,6 +141,34 @@ export default function OverviewPage({ globalDate }) {
             <Bar dataKey="sessions" fill="#2563EB" radius={[4, 4, 0, 0]} name="Sessions" />
           </BarChart>
         </ResponsiveContainer>
+      {/* Top Browsed Websites */}
+      <div className="card card-body mb-6">
+        <SectionHeading title={`Top Browsed Websites — ${today}`} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {topSitesData.length === 0
+            ? <p className="text-sm text-slate-400 col-span-full py-4 text-center">No browser activity recorded for today.</p>
+            : topSitesData.slice(0, 8).map((site, i) => {
+              const maxDur = topSitesData[0].active_duration || 1;
+              return (
+                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                  <span className="text-xs font-semibold text-slate-400 w-4 text-center">{i + 1}</span>
+                  <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 truncate">{site.domain}</p>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-mono font-medium text-slate-700">{formatDuration(site.active_duration)}</p>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
       </div>
 
       {/* Labs + Recent sessions */}

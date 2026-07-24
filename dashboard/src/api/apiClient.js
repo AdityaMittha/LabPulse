@@ -167,3 +167,54 @@ export async function deleteMachine(machineId) {
     throw err;
   }
 }
+
+export async function fetchTopSites(labId, date) {
+  if (!BASE_URL) {
+    return mock.getTopSites(labId, date);
+  }
+
+  try {
+    const params = new URLSearchParams({ lab_id: labId, date });
+    const url = `${BASE_URL}/analytics/browser?${params.toString()}`;
+    const resp = await fetch(url, { headers: getAuthHeaders() });
+    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+    const data = await resp.json();
+    return data.top_sites || [];
+  } catch (err) {
+    console.error("Failed to fetch top sites from backend. Falling back to mock data.", err);
+    return mock.getTopSites(labId, date);
+  }
+}
+
+export async function fetchStudentBrowserActivity(studentId) {
+  if (!BASE_URL) {
+    return mock.getStudentBrowserActivity(studentId);
+  }
+
+  try {
+    const params = new URLSearchParams({ student_id: studentId });
+    const url = `${BASE_URL}/analytics/browser?${params.toString()}`;
+    const resp = await fetch(url, { headers: getAuthHeaders() });
+    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+    const data = await resp.json();
+    // Aggregate from activities
+    const siteMap = {};
+    const pageLog = [];
+    (data.activities || []).forEach(a => {
+      (a.sites || []).forEach(s => {
+        if (!siteMap[s.domain]) siteMap[s.domain] = { domain: s.domain, active_duration: 0, visit_count: 0 };
+        siteMap[s.domain].active_duration += s.active_duration;
+        siteMap[s.domain].visit_count += s.visit_count;
+      });
+      pageLog.push(...(a.page_log || []));
+    });
+    return {
+      sites: Object.values(siteMap).sort((a, b) => b.active_duration - a.active_duration).slice(0, 10),
+      page_log: pageLog.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20),
+    };
+  } catch (err) {
+    console.error("Failed to fetch student browser activity. Falling back to mock data.", err);
+    return mock.getStudentBrowserActivity(studentId);
+  }
+}
+

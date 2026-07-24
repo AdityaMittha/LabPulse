@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Monitor, Users, CheckCircle2, Clock, Activity } from "lucide-react";
+import { Monitor, Users, CheckCircle2, Clock, Activity, Globe } from "lucide-react";
 import {
   labs, appUsages, getHourlyUtilization,
   getComplianceStats, todayStr, formatDuration
@@ -36,7 +36,7 @@ function HeatmapCell({ value, max }) {
   );
 }
 
-import { fetchUsage, fetchMachines } from "../api/apiClient";
+import { fetchUsage, fetchMachines, fetchTopSites } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
 
 export default function LabDetailPage({ globalDate }) {
@@ -55,6 +55,7 @@ export default function LabDetailPage({ globalDate }) {
   const [machinesData, setMachinesData] = useState([]);
   const [sessionsData, setSessionsData] = useState([]);
   const [allLabSessions, setAllLabSessions] = useState([]);
+  const [topSitesData, setTopSitesData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,12 +71,14 @@ export default function LabDetailPage({ globalDate }) {
     Promise.all([
       fetchMachines(labId),
       fetchUsage({ lab_id: labId, date: selectedDate }),
-      fetchUsage({ lab_id: labId }) // for heatmap
-    ]).then(([machs, sess, allSess]) => {
+      fetchUsage({ lab_id: labId }), // for heatmap
+      fetchTopSites(labId, selectedDate)
+    ]).then(([machs, sess, allSess, sites]) => {
       if (active) {
         setMachinesData(machs || []);
         setSessionsData(sess || []);
         setAllLabSessions(allSess || []);
+        setTopSitesData(sites || []);
         setLoading(false);
       }
     }).catch(err => {
@@ -252,6 +255,35 @@ export default function LabDetailPage({ globalDate }) {
             <div className="w-3 h-3 rounded bg-blue-200" /> Med
             <div className="w-3 h-3 rounded bg-primary-600" /> High
           </div>
+        </div>
+      {/* Top Websites */}
+      <div className="card card-body mb-6">
+        <SectionHeading title={`Top Websites Visited — ${selectedDate}`} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {topSitesData.length === 0
+            ? <p className="text-sm text-slate-400 col-span-full py-4 text-center">No browser activity recorded for this date.</p>
+            : topSitesData.map((site, i) => {
+              const maxDur = topSitesData[0].active_duration || 1;
+              return (
+                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                  <span className="text-xs font-semibold text-slate-400 w-4 text-center">{i + 1}</span>
+                  <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{site.domain}</p>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-mono font-medium text-slate-700">{formatDuration(site.active_duration)}</p>
+                    <p className="text-[10px] text-slate-400">{site.visit_count} visits</p>
+                  </div>
+                </div>
+              );
+            })
+          }
         </div>
       </div>
 

@@ -2,7 +2,7 @@
 ingest_summary/handler.py — Lambda: receive hourly summary, write to DynamoDB.
 Walchand Institute of Technology, Solapur — LabPulse Backend
 
-Privacy enforcement: rejects any payload containing disallowed fields.
+Accepts app usage, behavior metrics, and browser activity data from the agent.
 """
 import json
 import os
@@ -13,29 +13,13 @@ import boto3
 TABLE_PREFIX = os.environ.get("TABLE_PREFIX", "labpulse")
 dynamodb = boto3.resource("dynamodb")
 
-hourly_reports_table   = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
-app_usage_table        = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
-behavior_metrics_table = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
-machines_table         = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
-
-DISALLOWED_FIELDS = {
-    "password","keystrokes","key_values","raw_keys",
-    "screenshot","clipboard","window_title","url",
-}
+hourly_reports_table    = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
+app_usage_table         = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
+behavior_metrics_table  = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
+machines_table          = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
+browser_activity_table  = dynamodb.Table(f"{TABLE_PREFIX}-BrowserActivity")
 
 REQUIRED_SUMMARY_FIELDS = {"report_id","session_id","student_id","machine_id","lab_id","hour_start","hour_end","date","summary"}
-
-
-def _check_privacy(obj, path=""):
-    """Recursively ensure no disallowed fields are present."""
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if k.lower() in DISALLOWED_FIELDS:
-                raise ValueError(f"PRIVACY VIOLATION: disallowed field '{path}.{k}' in payload")
-            _check_privacy(v, f"{path}.{k}")
-    elif isinstance(obj, list):
-        for i, item in enumerate(obj):
-            _check_privacy(item, f"{path}[{i}]")
 
 
 def lambda_handler(event, context):
@@ -48,12 +32,6 @@ def lambda_handler(event, context):
     missing = REQUIRED_SUMMARY_FIELDS - set(body.keys())
     if missing:
         return {"statusCode": 400, "body": json.dumps({"error": f"Missing fields: {missing}"})}
-
-    # Privacy enforcement
-    try:
-        _check_privacy(body)
-    except ValueError as e:
-        return {"statusCode": 422, "body": json.dumps({"error": str(e)})}
 
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     session_id = body["session_id"]
@@ -96,6 +74,23 @@ def lambda_handler(event, context):
         "idle_time":          behavior.get("idle_time", 0),
         "active_time":        behavior.get("active_time", 0),
     })
+
+    # Write BrowserActivity (if present)
+    browser = body["summary"].get("browser_activity", {})
+    sites = browser.get("sites", [])
+    page_log = browser.get("page_log", [])
+    if sites or page_log:
+        browser_activity_table.put_item(Item={
+            "activity_id":  f"{session_id}#{body['hour_start']}",
+            "session_id":   session_id,
+            "student_id":   body["student_id"],
+            "lab_id":       body["lab_id"],
+            "date":         body["date"],
+            "hour_start":   body["hour_start"],
+            "sites_json":   json.dumps(sites),
+            "page_log_json": json.dumps(page_log),
+            "ingested_at":  now,
+        })
 
     # Update machine last_seen_at
     machines_table.update_item(

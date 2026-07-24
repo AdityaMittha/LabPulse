@@ -39,7 +39,6 @@ function DepartmentSelector() {
     { code: "CSE", name: "Computer Science & Engineering", desc: "CS Lab 1, CS Lab 2" },
     { code: "IT", name: "Information Technology", desc: "IT Lab" },
     { code: "E&TC", name: "Electronics & Telecommunication", desc: "E&TC Lab" },
-    { code: "MECH", name: "Mechanical Engineering", desc: "General Workstations" },
   ];
 
   return (

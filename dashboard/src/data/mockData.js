@@ -36,7 +36,7 @@ export const machines = [
 ];
 
 // ── Students ─────────────────────────────────────────────────────────────────
-const depts = ["CSE", "IT", "E&TC", "MECH"];
+const depts = ["CSE", "IT", "E&TC"];
 const years  = ["FE", "SE", "TE", "BE"];
 const firstNames = ["Aditya","Priya","Rohan","Sneha","Arjun","Kavya","Nikhil","Pooja","Rahul","Ananya",
                     "Vikram","Meera","Saurabh","Deepa","Kiran","Swati","Yash","Riya","Omkar","Shruti",
@@ -46,8 +46,8 @@ const lastNames  = ["Patil","Jadhav","Shinde","Kulkarni","Deshmukh","More","Kada
                     "Yadav","Raut","Chavan","Wagh","Patel","Thorat","Godase","Bhoite","Lokhande","Ingale"];
 
 export const students = Array.from({ length: 120 }, (_, i) => {
-  const dept = depts[Math.floor(i / 30)];
-  const year = years[Math.floor((i % 30) / 8)];
+  const dept = depts[Math.floor(i / 40)];
+  const year = years[Math.floor((i % 40) / 10)];
   const rollNo = String(i + 1).padStart(3, "0");
   return {
     student_id: `${dept.slice(0,2)}${new Date().getFullYear() - (years.indexOf(year)+1)}${rollNo}`,
@@ -107,12 +107,31 @@ const apps = [
   "python.exe", "java.exe", "cmd.exe", "devenv.exe", "notepad++.exe",
   "putty.exe", "Postman.exe", "eclipse.exe", "idle.exe", "matlab.exe",
 ];
+// ── Mock Websites for Browser Activity ────────────────────────────────────────
+const mockSites = [
+  { domain: "github.com",         pages: ["AdityaMittha/LabPulse", "Pull requests", "Issues · LabPulse", "Actions"] },
+  { domain: "stackoverflow.com",  pages: ["python - How to fix IndentationError", "javascript - async/await explained", "react hooks tutorial"] },
+  { domain: "docs.python.org",    pages: ["Tutorial — Python 3.12", "Library Reference", "Built-in Functions"] },
+  { domain: "google.com",         pages: ["Google Search", "how to install python packages", "vite react setup"] },
+  { domain: "chat.openai.com",    pages: ["ChatGPT", "New chat", "Help with Python code"] },
+  { domain: "youtube.com",        pages: ["React Tutorial for Beginners", "Python Full Course", "Data Structures Explained"] },
+  { domain: "w3schools.com",      pages: ["HTML Tutorial", "CSS Tutorial", "JavaScript Tutorial"] },
+  { domain: "geeksforgeeks.org",  pages: ["Binary Search Tree", "Graph Algorithms", "Sorting Algorithms"] },
+  { domain: "leetcode.com",       pages: ["Two Sum - LeetCode", "Problems - Algorithms", "Contest"] },
+  { domain: "react.dev",          pages: ["Quick Start – React", "useState – React", "Thinking in React"] },
+  { domain: "developer.mozilla.org", pages: ["MDN Web Docs", "JavaScript Guide", "CSS Reference"] },
+  { domain: "npmjs.com",          pages: ["npm | recharts", "npm | react-router-dom", "npm | lucide-react"] },
+  { domain: "wikipedia.org",      pages: ["Computer science - Wikipedia", "Operating system - Wikipedia", "Data structure"] },
+  { domain: "kaggle.com",         pages: ["Datasets", "Competitions", "Titanic - Machine Learning"] },
+  { domain: "colab.research.google.com", pages: ["Untitled notebook", "ML Lab Assignment", "Data Analysis"] },
+];
 
 export function generateSessions(daysBack = 3) {
   const sessions = [];
   const appUsages = {};
   const behaviorMetrics = {};
   const hourlyReports = {};
+  const browserActivities = {};
 
   const now = new Date();
 
@@ -199,18 +218,37 @@ export function generateSessions(daysBack = 3) {
           hour_end: logoutTime.toISOString(),
           date: dateStr,
         };
+        // Browser activity
+        const numSites = randomInt(2, 5);
+        const sessionSites = [...mockSites].sort(() => Math.random() - 0.5).slice(0, numSites);
+        const siteDurPool = Math.floor(activeSec * 0.4); // ~40% of active time in browsers
+        browserActivities[sessionId] = {
+          sites: sessionSites.map((site, idx) => ({
+            domain: site.domain,
+            active_duration: randomInt(60, Math.floor(siteDurPool / numSites) + 60),
+            visit_count: randomInt(1, 6),
+          })),
+          page_log: sessionSites.slice(0, randomInt(2, 4)).map((site, idx) => ({
+            title: randomItem(site.pages),
+            url: `https://${site.domain}/${["page","docs","search","lab","resource"][idx % 5]}`,
+            domain: site.domain,
+            browser: randomItem(["Google Chrome", "Microsoft Edge", "Mozilla Firefox"]),
+            timestamp: new Date(loginTime.getTime() + randomInt(60, 1800) * 1000).toISOString(),
+          })),
+        };
       });
     });
   }
 
-  return { sessions, appUsages, behaviorMetrics, hourlyReports };
+  return { sessions, appUsages, behaviorMetrics, hourlyReports, browserActivities };
 }
 
 // Pre-generate data
 const _generated = generateSessions(7);
-export const sessions      = _generated.sessions;
-export const appUsages     = _generated.appUsages;
+export const sessions        = _generated.sessions;
+export const appUsages       = _generated.appUsages;
 export const behaviorMetrics = _generated.behaviorMetrics;
+export const browserActivities = _generated.browserActivities;
 
 // ── Analytics helpers ────────────────────────────────────────────────────────
 export function getLabUtilization(labId, dateStr) {
@@ -259,6 +297,47 @@ export function getTopApps(labId, dateStr) {
     .map(([name, duration]) => ({ name, duration }))
     .sort((a, b) => b.duration - a.duration)
     .slice(0, 6);
+}
+
+export function getTopSites(labId, dateStr) {
+  const labSessions = sessions.filter(s => s.lab_id === labId && s.date === dateStr);
+  const siteMap = {};
+  labSessions.forEach(s => {
+    const ba = browserActivities[s.session_id];
+    if (!ba) return;
+    ba.sites.forEach(site => {
+      if (!siteMap[site.domain]) siteMap[site.domain] = { domain: site.domain, active_duration: 0, visit_count: 0 };
+      siteMap[site.domain].active_duration += site.active_duration;
+      siteMap[site.domain].visit_count += site.visit_count;
+    });
+  });
+  return Object.values(siteMap)
+    .sort((a, b) => b.active_duration - a.active_duration)
+    .slice(0, 10);
+}
+
+export function getBrowserActivity(sessionId) {
+  return browserActivities[sessionId] || { sites: [], page_log: [] };
+}
+
+export function getStudentBrowserActivity(studentId) {
+  const studentSess = sessions.filter(s => s.student_id === studentId);
+  const siteMap = {};
+  const allPageLog = [];
+  studentSess.forEach(s => {
+    const ba = browserActivities[s.session_id];
+    if (!ba) return;
+    ba.sites.forEach(site => {
+      if (!siteMap[site.domain]) siteMap[site.domain] = { domain: site.domain, active_duration: 0, visit_count: 0 };
+      siteMap[site.domain].active_duration += site.active_duration;
+      siteMap[site.domain].visit_count += site.visit_count;
+    });
+    allPageLog.push(...(ba.page_log || []));
+  });
+  return {
+    sites: Object.values(siteMap).sort((a, b) => b.active_duration - a.active_duration).slice(0, 10),
+    page_log: allPageLog.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20),
+  };
 }
 
 export function todayStr() {

@@ -167,6 +167,34 @@ Resources:
           KeySchema: [{ AttributeName: lab_id, KeyType: HASH }]
           Projection: { ProjectionType: ALL }
 
+  BrowserActivityTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-BrowserActivity"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: activity_id, AttributeType: S }
+        - { AttributeName: session_id,  AttributeType: S }
+        - { AttributeName: student_id,  AttributeType: S }
+        - { AttributeName: lab_id,      AttributeType: S }
+        - { AttributeName: date,        AttributeType: S }
+      KeySchema:
+        - { AttributeName: activity_id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: by_session
+          KeySchema: [{ AttributeName: session_id, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_student_date
+          KeySchema:
+            - { AttributeName: student_id, KeyType: HASH }
+            - { AttributeName: date,       KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_lab_date
+          KeySchema:
+            - { AttributeName: lab_id, KeyType: HASH }
+            - { AttributeName: date,   KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
 # ── Cognito User Pool ─────────────────────────────────────────────────────────
 
   CognitoUserPool:
@@ -271,6 +299,7 @@ Resources:
         - DynamoDBCrudPolicy: { TableName: !Ref AppUsageTable }
         - DynamoDBCrudPolicy: { TableName: !Ref BehaviorMetricsTable }
         - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref BrowserActivityTable }
       Events:
         Ingest:
           Type: HttpApi
@@ -308,6 +337,7 @@ Resources:
         - DynamoDBReadPolicy: { TableName: !Ref HourlyReportsTable }
         - DynamoDBReadPolicy: { TableName: !Ref AppUsageTable }
         - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref BrowserActivityTable }
       Events:
         GetUsage:
           Type: HttpApi
@@ -320,6 +350,12 @@ Resources:
           Properties:
             ApiId: !Ref HttpApi
             Path: /analytics/compliance
+            Method: GET
+        GetBrowser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /analytics/browser
             Method: GET
 
   ManageEntitiesFunction:
