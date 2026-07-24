@@ -6,6 +6,7 @@ import {
 import { FileBarChart2, Download } from "lucide-react";
 import { labs, sessions, getComplianceStats } from "../data/mockData";
 import { StatCard, SectionHeading, PageWrapper } from "../components/Shared";
+import { useAuth } from "../auth/AuthContext";
 
 function getLast7Days() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -16,12 +17,25 @@ function getLast7Days() {
 }
 
 export default function ReportsPage() {
+  const { user, isAdmin } = useAuth();
   const [selectedLab, setSelectedLab] = useState("ALL");
   const days = getLast7Days();
 
+  const visibleLabs = useMemo(() => {
+    if (isAdmin) return labs;
+    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
+  }, [isAdmin, user]);
+
+  const visibleLabIds = useMemo(() => visibleLabs.map(l => l.lab_id), [visibleLabs]);
+
   const trendData = useMemo(() => {
     return days.map(date => {
-      const labFilter = selectedLab === "ALL" ? sessions : sessions.filter(s => s.lab_id === selectedLab);
+      let labFilter;
+      if (selectedLab === "ALL") {
+        labFilter = sessions.filter(s => visibleLabIds.includes(s.lab_id));
+      } else {
+        labFilter = sessions.filter(s => s.lab_id === selectedLab);
+      }
       const day = labFilter.filter(s => s.date === date);
       const compliant = day.filter(s => s.compliance_status === "compliant").length;
       const total = day.length;
@@ -32,28 +46,33 @@ export default function ReportsPage() {
         compliancePct: total > 0 ? Math.round((compliant / total) * 100) : 0,
       };
     });
-  }, [selectedLab, days]);
+  }, [selectedLab, visibleLabIds, days]);
 
   const labTrend = useMemo(() => {
     return days.map(date => {
       const entry = { date: date.slice(5) };
-      labs.forEach(lab => {
+      visibleLabs.forEach(lab => {
         const day = sessions.filter(s => s.lab_id === lab.lab_id && s.date === date);
         entry[lab.name] = day.length;
       });
       return entry;
     });
-  }, [days]);
+  }, [visibleLabs, days]);
 
   const totals = useMemo(() => {
-    const filtered = selectedLab === "ALL" ? sessions : sessions.filter(s => s.lab_id === selectedLab);
+    let filtered;
+    if (selectedLab === "ALL") {
+      filtered = sessions.filter(s => visibleLabIds.includes(s.lab_id));
+    } else {
+      filtered = sessions.filter(s => s.lab_id === selectedLab);
+    }
     const compliant = filtered.filter(s => s.compliance_status === "compliant").length;
     return {
       total: filtered.length,
       compliant,
       pct: filtered.length > 0 ? Math.round((compliant / filtered.length) * 100) : 0,
     };
-  }, [selectedLab]);
+  }, [selectedLab, visibleLabIds]);
 
   const COLORS = ["#2563EB","#0EA5E9","#8B5CF6","#F59E0B"];
 
@@ -61,13 +80,13 @@ export default function ReportsPage() {
     <PageWrapper>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Reports</h1>
-          <p className="page-subtitle">Last 7 days usage and compliance trends</p>
+          <h1 className="page-title">Reports {isAdmin ? "" : `— ${user.department}`}</h1>
+          <p className="page-subtitle">Last 7 days usage and compliance trends for {isAdmin ? "all labs" : `${user.department} department`}</p>
         </div>
         <div className="flex items-center gap-2">
           <select className="form-select text-sm py-1.5 w-40" value={selectedLab} onChange={e => setSelectedLab(e.target.value)}>
             <option value="ALL">All Labs</option>
-            {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
+            {visibleLabs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
           </select>
           <button className="btn-secondary btn-sm">
             <Download size={13} /> Export CSV
@@ -123,7 +142,7 @@ export default function ReportsPage() {
             <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-            {labs.map((lab, i) => (
+            {visibleLabs.map((lab, i) => (
               <Bar key={lab.lab_id} dataKey={lab.name} fill={COLORS[i % COLORS.length]} radius={[3,3,0,0]} stackId="a" />
             ))}
           </BarChart>

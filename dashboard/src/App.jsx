@@ -31,6 +31,70 @@ const BREADCRUMBS = {
   "/admin/timetable": [{ label: "Admin" }, { label: "Timetable" }],
 };
 
+function DepartmentSelector() {
+  const { setDepartment, logout } = useAuth();
+  const [selected, setSelected] = useState("");
+
+  const depts = [
+    { code: "CSE", name: "Computer Science & Engineering", desc: "CS Lab 1, CS Lab 2" },
+    { code: "IT", name: "Information Technology", desc: "IT Lab" },
+    { code: "E&TC", name: "Electronics & Telecommunication", desc: "E&TC Lab" },
+    { code: "MECH", name: "Mechanical Engineering", desc: "General Workstations" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary-700 via-primary-600 to-blue-500 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-6 text-center text-white">
+          <h2 className="text-xl font-bold">Select Department</h2>
+          <p className="text-primary-100 text-xs mt-1">Please select your academic department to continue</p>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <div className="space-y-3">
+            {depts.map(d => (
+              <button
+                key={d.code}
+                onClick={() => setSelected(d.code)}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
+                  selected === d.code
+                    ? "border-primary-600 bg-primary-50/30 text-primary-900"
+                    : "border-slate-200 hover:border-slate-350 text-slate-700 bg-white"
+                }`}
+              >
+                <div>
+                  <p className="font-semibold text-sm">{d.code} — {d.name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Assigned labs: {d.desc}</p>
+                </div>
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                  selected === d.code ? "border-primary-600 bg-primary-600" : "border-slate-300"
+                }`}>
+                  {selected === d.code && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 flex gap-3">
+            <button onClick={logout} className="btn-secondary flex-1 justify-center text-xs py-2">
+              Sign Out
+            </button>
+            <button
+              onClick={() => setDepartment(selected)}
+              disabled={!selected}
+              className="btn-primary flex-1 justify-center text-xs py-2"
+            >
+              Confirm & Enter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedLayout({ requireAdmin = false }) {
   const { user, isAdmin } = useAuth();
   const location = useLocation();
@@ -38,6 +102,7 @@ function ProtectedLayout({ requireAdmin = false }) {
   const [globalDate, setGlobalDate] = useState(todayStr());
 
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (user.role === "faculty" && !user.department) return <DepartmentSelector />;
   if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
 
   const breadcrumbs = BREADCRUMBS[location.pathname] || [{ label: "Overview", to: "/" }, { label: location.pathname.split("/").pop() }];

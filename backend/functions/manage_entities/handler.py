@@ -10,14 +10,19 @@ import hashlib
 import secrets
 import uuid
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 
 TABLE_PREFIX = os.environ.get("TABLE_PREFIX", "labpulse")
 dynamodb = boto3.resource("dynamodb")
 
-machines_table  = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
-students_table  = dynamodb.Table(f"{TABLE_PREFIX}-Users")
-timetable_table = dynamodb.Table(f"{TABLE_PREFIX}-Timetable")
+# Tables
+machines_table       = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
+students_table       = dynamodb.Table(f"{TABLE_PREFIX}-Users")
+timetable_table      = dynamodb.Table(f"{TABLE_PREFIX}-Timetable")
+sessions_table       = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
+app_usage_table      = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
+behavior_table       = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
+hourly_reports_table = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
 
 
 def _cors(body, code=200):
@@ -36,6 +41,97 @@ def _generate_api_key() -> tuple[str, str]:
     raw = "lp_" + secrets.token_urlsafe(24)
     key_hash = "sha256:" + hashlib.sha256(raw.encode()).hexdigest()
     return raw, key_hash
+
+
+def _cascade_delete_sessions(session_ids):
+    """Utility to delete sessions and all associated app usage, behavior metrics, and hourly reports."""
+    for sess_id in session_ids:
+        # 1. Delete AppUsage
+        try:
+            resp = app_usage_table.query(
+                IndexName="by_session",
+                KeyConditionExpression=Key("session_id").eq(sess_id)
+            )
+            for app in resp.get("Items", []):
+                app_usage_table.delete_item(Key={"app_usage_id": app["app_usage_id"]})
+        except Exception as e:
+            print(f"Error deleting AppUsage for session {sess_id}: {e}")
+        
+        # 2. Delete BehaviorMetrics
+        try:
+            resp = behavior_table.query(
+                IndexName="by_session",
+                KeyConditionExpression=Key("session_id").eq(sess_id)
+            )
+            for metric in resp.get("Items", []):
+                behavior_table.delete_item(Key={"metric_id": metric["metric_id"]})
+        except Exception as e:
+            print(f"Error deleting BehaviorMetrics for session {sess_id}: {e}")
+            
+        # 3. Delete from Sessions table
+        try:
+            sessions_table.delete_item(Key={"session_id": sess_id})
+        except Exception as e:
+            print(f"Error deleting session {sess_id} from Sessions: {e}")
+
+
+def _delete_student_cascade(student_id):
+    """Cascade delete all student data: sessions, apps, metrics, hourly reports, and user profile."""
+    # 1. Find all session IDs for student
+    try:
+        sessions_resp = sessions_table.query(
+            IndexName="by_student",
+            KeyConditionExpression=Key("student_id").eq(student_id)
+        )
+        session_ids = [s["session_id"] for s in sessions_resp.get("Items", [])]
+        
+        # 2. Delete all sessions and related metrics
+        _cascade_delete_sessions(session_ids)
+    except Exception as e:
+        print(f"Error cascading student sessions for {student_id}: {e}")
+    
+    # 3. Delete HourlyReports for student
+    try:
+        reports_resp = hourly_reports_table.query(
+            IndexName="by_student_date",
+            KeyConditionExpression=Key("student_id").eq(student_id)
+        )
+        for report in reports_resp.get("Items", []):
+            hourly_reports_table.delete_item(Key={"report_id": report["report_id"]})
+    except Exception as e:
+        print(f"Error deleting HourlyReports for student {student_id}: {e}")
+        
+    # 4. Delete the student profile
+    students_table.delete_item(Key={"student_id": student_id})
+
+
+def _delete_machine_cascade(machine_id):
+    """Cascade delete all machine data: sessions, apps, metrics, hourly reports, and machine registration."""
+    # 1. Find all session IDs for machine
+    try:
+        sessions_resp = sessions_table.query(
+            IndexName="by_machine",
+            KeyConditionExpression=Key("machine_id").eq(machine_id)
+        )
+        session_ids = [s["session_id"] for s in sessions_resp.get("Items", [])]
+        
+        # 2. Delete all sessions and related metrics
+        _cascade_delete_sessions(session_ids)
+    except Exception as e:
+        print(f"Error cascading machine sessions for {machine_id}: {e}")
+    
+    # 3. Delete HourlyReports for machine
+    try:
+        reports_resp = hourly_reports_table.scan(
+            FilterExpression=Attr("machine_id").eq(machine_id)
+        )
+        for report in reports_resp.get("Items", []):
+            hourly_reports_table.delete_item(Key={"report_id": report["report_id"]})
+    except Exception as e:
+        print(f"Error deleting HourlyReports for machine {machine_id}: {e}")
+        
+    # 4. Delete the machine profile
+    machines_table.delete_item(Key={"machine_id": machine_id})
 
 
 def lambda_handler(event, context):
@@ -91,14 +187,13 @@ def _handle_machines(method, body, event):
             "last_seen_at": None,
             "created_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         })
-        # Return raw key ONCE — never stored
         return _cors({"machine_id": machine_id, "api_key": raw_key, "message": "Save this API key — it won't be shown again."}, 201)
 
     if method == "DELETE":
         machine_id = qs.get("machine_id") or body.get("machine_id")
         if not machine_id:
             return _cors({"error": "machine_id required"}, 400)
-        machines_table.delete_item(Key={"machine_id": machine_id})
+        _delete_machine_cascade(machine_id)
         return _cors({"status": "deleted"})
 
     return _cors({"error": "Method not allowed"}, 405)
@@ -131,7 +226,9 @@ def _handle_students(method, body, event):
 
     if method == "DELETE":
         student_id = qs.get("student_id") or body.get("student_id")
-        students_table.delete_item(Key={"student_id": student_id})
+        if not student_id:
+            return _cors({"error": "student_id required"}, 400)
+        _delete_student_cascade(student_id)
         return _cors({"status": "deleted"})
 
     return _cors({"error": "Method not allowed"}, 405)

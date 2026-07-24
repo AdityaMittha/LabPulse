@@ -1,14 +1,16 @@
 import { useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Monitor, Clock, Activity, CheckCircle2 } from "lucide-react";
 import { machines, sessions, appUsages, labs, todayStr, formatDuration } from "../data/mockData";
 import { StatCard, ComplianceBadge, MachineStatusBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
+import { deleteMachine } from "../api/apiClient";
 
-const APP_COLORS = ["#2563EB","#0EA5E9","#8B5CF6","#F59E0B","#10B981","#F43F5E"];
+const APP_COLORS = ["#2563EB", "#0EA5E9", "#8B5CF6", "#F59E0B", "#10B981", "#F43F5E"];
 
 export default function MachineDetailPage() {
   const { machineId } = useParams();
+  const navigate = useNavigate();
   const machine = useMemo(() => machines.find(m => m.machine_id === machineId), [machineId]);
   const lab     = useMemo(() => machine ? labs.find(l => l.lab_id === machine.lab_id) : null, [machine]);
   const today   = todayStr();
@@ -140,6 +142,40 @@ export default function MachineDetailPage() {
               }
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="card border-red-200 bg-red-50/20 mt-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-red-100 bg-red-50/50 flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-red-800">Danger Zone</h3>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-red-600 font-medium">Permanently Delete Machine Record</p>
+          <p className="text-xs text-slate-500 mt-1">
+            This action cannot be undone. It will permanently delete machine <strong>{machine.machine_id} ({machine.hostname})</strong> and purge all associated session logs, app usage metrics, and behavior history.
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={async () => {
+                const conf = window.prompt(`To confirm deletion, type the machine ID "${machine.machine_id}":`);
+                if (conf === machine.machine_id) {
+                  try {
+                    await deleteMachine(machine.machine_id);
+                    alert("Machine and all associated data successfully deleted.");
+                    navigate("/admin/machines");
+                  } catch (err) {
+                    alert("Failed to delete machine: " + err.message);
+                  }
+                } else if (conf !== null) {
+                  alert("Incorrect machine ID. Deletion cancelled.");
+                }
+              }}
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow transition-colors"
+            >
+              Delete Machine & All Data
+            </button>
+          </div>
         </div>
       </div>
     </PageWrapper>

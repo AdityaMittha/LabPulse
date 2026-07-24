@@ -5,7 +5,10 @@ import { labs, getComplianceStats, todayStr } from "../data/mockData";
 import { StatCard, UtilBar, PageWrapper, SectionHeading } from "../components/Shared";
 import { fetchUsage, fetchMachines } from "../api/apiClient";
 
+import { useAuth } from "../auth/AuthContext";
+
 export default function LabsPage({ globalDate }) {
+  const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
   const [sessionsData, setSessionsData] = useState([]);
   const [machinesData, setMachinesData] = useState([]);
@@ -32,7 +35,12 @@ export default function LabsPage({ globalDate }) {
     return () => { active = false; };
   }, [today]);
 
-  const labStats = useMemo(() => labs.map(lab => {
+  const visibleLabs = useMemo(() => {
+    if (isAdmin) return labs;
+    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
+  }, [isAdmin, user]);
+
+  const labStats = useMemo(() => visibleLabs.map(lab => {
     const labSessions = sessionsData.filter(s => s.lab_id === lab.lab_id);
     const labMachines = machinesData.filter(m => m.lab_id === lab.lab_id);
     const activeMachines = labMachines.filter(m => m.status === "active").length;
@@ -50,7 +58,7 @@ export default function LabsPage({ globalDate }) {
       compliancePct,
       comp,
     };
-  }), [sessionsData, machinesData, today]);
+  }), [visibleLabs, sessionsData, machinesData, today]);
 
   if (loading) {
     return (
@@ -73,8 +81,8 @@ export default function LabsPage({ globalDate }) {
     <PageWrapper>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Labs</h1>
-          <p className="page-subtitle">All computer labs · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}</p>
+          <h1 className="page-title">Labs {isAdmin ? "" : `— ${user.department}`}</h1>
+          <p className="page-subtitle">{isAdmin ? "All computer labs" : `${user.department} computer labs`} · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}</p>
         </div>
       </div>
 

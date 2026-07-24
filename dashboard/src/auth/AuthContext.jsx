@@ -93,6 +93,15 @@ export function AuthProvider({ children }) {
     return userData;
   }, []);
 
+  const setDepartment = useCallback((dept) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, department: dept };
+      sessionStorage.setItem("labpulse_user", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   const logout = useCallback(() => {
     sessionStorage.removeItem("labpulse_user");
     sessionStorage.removeItem("labpulse_token");
@@ -100,7 +109,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin: user?.role === "admin" }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin: user?.role === "admin", setDepartment }}>
       {children}
     </AuthContext.Provider>
   );

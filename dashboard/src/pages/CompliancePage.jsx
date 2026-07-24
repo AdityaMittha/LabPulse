@@ -5,9 +5,18 @@ import { labs, todayStr } from "../data/mockData";
 import { ComplianceBadge, SectionHeading, PageWrapper, StatCard } from "../components/Shared";
 import { fetchTimetable, fetchUsage, fetchStudents } from "../api/apiClient";
 
+import { useAuth } from "../auth/AuthContext";
+
 export default function CompliancePage({ globalDate }) {
+  const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
-  const [selectedLab,  setSelectedLab]  = useState(labs[0].lab_id);
+
+  const visibleLabs = useMemo(() => {
+    if (isAdmin) return labs;
+    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
+  }, [isAdmin, user]);
+
+  const [selectedLab,  setSelectedLab]  = useState(visibleLabs[0]?.lab_id || labs[0].lab_id);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [search,       setSearch]       = useState("");
@@ -118,7 +127,7 @@ export default function CompliancePage({ globalDate }) {
           <div>
             <label className="form-label">Lab</label>
             <select className="form-select" value={selectedLab} onChange={e => { setSelectedLab(e.target.value); setSelectedSlot(""); }}>
-              {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
+              {visibleLabs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
             </select>
           </div>
           <div>

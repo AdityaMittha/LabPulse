@@ -12,9 +12,11 @@ import {
   StatCard, ComplianceBadge, SectionHeading, PageWrapper
 } from "../components/Shared";
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { fetchUsage, fetchMachines } from "../api/apiClient";
 
 export default function OverviewPage({ globalDate }) {
+  const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
   const [sessionsData, setSessionsData] = useState([]);
   const [machinesData, setMachinesData] = useState([]);
@@ -41,8 +43,24 @@ export default function OverviewPage({ globalDate }) {
     return () => { active = false; };
   }, [today]);
 
-  const todaySessions  = sessionsData;
-  const activeMachines = machinesData.filter(m => m.status === "active").length;
+  // Filter labs by department if not admin
+  const visibleLabs = useMemo(() => {
+    if (isAdmin) return labs;
+    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
+  }, [isAdmin, user]);
+
+  const visibleLabIds = useMemo(() => visibleLabs.map(l => l.lab_id), [visibleLabs]);
+
+  // Filter sessions and machines by visible labs
+  const todaySessions = useMemo(() => {
+    return sessionsData.filter(s => visibleLabIds.includes(s.lab_id));
+  }, [sessionsData, visibleLabIds]);
+
+  const visibleMachines = useMemo(() => {
+    return machinesData.filter(m => visibleLabIds.includes(m.lab_id));
+  }, [machinesData, visibleLabIds]);
+
+  const activeMachines = visibleMachines.filter(m => m.status === "active").length;
   const onlineNow      = Math.min(activeMachines, Math.max(1, Math.floor(activeMachines * 0.6)));
 
   const complianceAll = useMemo(() => {
@@ -50,7 +68,7 @@ export default function OverviewPage({ globalDate }) {
     return todaySessions.length > 0 ? Math.round((c / todaySessions.length) * 100) : 0;
   }, [todaySessions]);
 
-  // Hourly utilization across all labs
+  // Hourly utilization across all visible labs
   const hourlyData = useMemo(() => {
     return Array.from({ length: 9 }, (_, i) => {
       const hour = i + 9;
@@ -69,13 +87,13 @@ export default function OverviewPage({ globalDate }) {
   );
 
   // Lab utilization cards
-  const labStats = useMemo(() => labs.map(lab => {
+  const labStats = useMemo(() => visibleLabs.map(lab => {
     const labSessions = todaySessions.filter(s => s.lab_id === lab.lab_id);
-    const labMachines = machinesData.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
+    const labMachines = visibleMachines.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
     const util = labMachines > 0 ? Math.min(100, Math.round((labSessions.length / (labMachines * 8)) * 100)) : 0;
     const compliance = getComplianceStats(lab.lab_id, today);
     return { ...lab, util, sessionCount: labSessions.length, machineCount: labMachines, compliance };
-  }), [todaySessions, machinesData, today]);
+  }), [visibleLabs, todaySessions, visibleMachines, today]);
 
   if (loading) {
     return (
@@ -95,8 +113,8 @@ export default function OverviewPage({ globalDate }) {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Overview</h1>
-          <p className="page-subtitle">All labs · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          <h1 className="page-title">Overview {isAdmin ? "" : `— ${user.department}`}</h1>
+          <p className="page-subtitle">{isAdmin ? "All labs" : `${user.department} department`} · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
         </div>
       </div>
 

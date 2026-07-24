@@ -109,3 +109,61 @@ export async function fetchTimetable(labId = "") {
     return mock.timetable;
   }
 }
+
+export async function deleteStudent(studentId) {
+  if (!BASE_URL) {
+    console.log(`[Mock] Deleting student ${studentId} and all associated data...`);
+    const idx = mock.students.findIndex(s => s.student_id === studentId);
+    if (idx !== -1) mock.students.splice(idx, 1);
+    
+    // Cascade delete sessions and their usage/metrics
+    const studentSessions = mock.sessions.filter(s => s.student_id === studentId);
+    studentSessions.forEach(s => {
+      delete mock.appUsages[s.session_id];
+      delete mock.behaviorMetrics[s.session_id];
+    });
+    
+    const remainingSessions = mock.sessions.filter(s => s.student_id !== studentId);
+    mock.sessions.splice(0, mock.sessions.length, ...remainingSessions);
+    return { status: "deleted" };
+  }
+
+  try {
+    const url = `${BASE_URL}/admin/students?student_id=${studentId}`;
+    const resp = await fetch(url, { method: "DELETE", headers: getAuthHeaders() });
+    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+    return await resp.json();
+  } catch (err) {
+    console.error("Failed to delete student from backend", err);
+    throw err;
+  }
+}
+
+export async function deleteMachine(machineId) {
+  if (!BASE_URL) {
+    console.log(`[Mock] Deleting machine ${machineId} and all associated data...`);
+    const idx = mock.machines.findIndex(m => m.machine_id === machineId);
+    if (idx !== -1) mock.machines.splice(idx, 1);
+    
+    // Cascade delete sessions and their usage/metrics
+    const machineSessions = mock.sessions.filter(s => s.machine_id === machineId);
+    machineSessions.forEach(s => {
+      delete mock.appUsages[s.session_id];
+      delete mock.behaviorMetrics[s.session_id];
+    });
+    
+    const remainingSessions = mock.sessions.filter(s => s.machine_id !== machineId);
+    mock.sessions.splice(0, mock.sessions.length, ...remainingSessions);
+    return { status: "deleted" };
+  }
+
+  try {
+    const url = `${BASE_URL}/admin/machines?machine_id=${machineId}`;
+    const resp = await fetch(url, { method: "DELETE", headers: getAuthHeaders() });
+    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+    return await resp.json();
+  } catch (err) {
+    console.error("Failed to delete machine from backend", err);
+    throw err;
+  }
+}

@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { User, Clock, Monitor, CheckCircle2, Activity } from "lucide-react";
 import { students, sessions, appUsages, behaviorMetrics, labs, machines, todayStr, formatDuration } from "../data/mockData";
 import { StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
+import { deleteStudent } from "../api/apiClient";
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
+  const navigate = useNavigate();
   const student = useMemo(() => students.find(s => s.student_id === studentId), [studentId]);
 
   const studentSessions = useMemo(
@@ -170,6 +172,40 @@ export default function StudentDetailPage() {
               }
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="card border-red-200 bg-red-50/20 mt-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-red-100 bg-red-50/50 flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-red-800">Danger Zone</h3>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-red-600 font-medium">Permanently Delete Student Record</p>
+          <p className="text-xs text-slate-500 mt-1">
+            This action cannot be undone. It will permanently delete student <strong>{student.name} ({student.student_id})</strong> and purge all associated session logs, app usage metrics, and behavior history.
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={async () => {
+                const conf = window.prompt(`To confirm deletion, type the student ID "${student.student_id}":`);
+                if (conf === student.student_id) {
+                  try {
+                    await deleteStudent(student.student_id);
+                    alert("Student and all associated data successfully deleted.");
+                    navigate("/admin/students");
+                  } catch (err) {
+                    alert("Failed to delete student: " + err.message);
+                  }
+                } else if (conf !== null) {
+                  alert("Incorrect student ID. Deletion cancelled.");
+                }
+              }}
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow transition-colors"
+            >
+              Delete Student & All Data
+            </button>
+          </div>
         </div>
       </div>
     </PageWrapper>

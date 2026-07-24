@@ -37,10 +37,19 @@ function HeatmapCell({ value, max }) {
 }
 
 import { fetchUsage, fetchMachines } from "../api/apiClient";
+import { useAuth } from "../auth/AuthContext";
 
 export default function LabDetailPage({ globalDate }) {
   const { labId } = useParams();
+  const { user, isAdmin } = useAuth();
   const lab = labs.find(l => l.lab_id === labId);
+
+  const isAuthorized = useMemo(() => {
+    if (isAdmin) return true;
+    if (!lab) return false;
+    return lab.department.includes(user.department) || user.department.includes(lab.department);
+  }, [lab, isAdmin, user]);
+
   const today = globalDate || todayStr();
   const [selectedDate, setSelectedDate] = useState(today);
   const [machinesData, setMachinesData] = useState([]);
@@ -133,6 +142,17 @@ export default function LabDetailPage({ globalDate }) {
 
   if (!lab) {
     return <PageWrapper><EmptyState title="Lab not found" description="This lab doesn't exist." /></PageWrapper>;
+  }
+
+  if (!isAuthorized) {
+    return (
+      <PageWrapper>
+        <EmptyState
+          title="Access Denied"
+          description={`You are only authorized to view labs for the ${user.department} department.`}
+        />
+      </PageWrapper>
+    );
   }
 
   const compliancePct = complianceSt.total > 0

@@ -131,7 +131,9 @@ export default function Sidebar({ collapsed, onCollapse }) {
             </div>
             <div className="flex-1 overflow-hidden">
               <p className="text-xs font-semibold text-slate-900 truncate">{user?.name}</p>
-              <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
+              <p className="text-xs text-slate-500 capitalize">
+                {user?.role === "faculty" && user?.department ? `Faculty (${user.department})` : user?.role}
+              </p>
             </div>
             <button onClick={handleLogout} title="Logout"
               className="p-1.5 rounded-lg text-slate-400 hover:text-danger hover:bg-red-50 transition-colors">
