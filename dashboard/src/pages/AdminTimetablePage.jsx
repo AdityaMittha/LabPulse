@@ -55,10 +55,10 @@ export default function AdminTimetablePage() {
         {labs.map(l => (
           <button key={l.lab_id}
             onClick={() => setLabFilter(l.lab_id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all ${
               labFilter === l.lab_id
                 ? "bg-primary-600 text-white border-primary-600"
-                : "bg-white text-slate-600 border-slate-200 hover:border-primary-300"
+                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
             }`}
           >
             {l.name}
@@ -70,14 +70,14 @@ export default function AdminTimetablePage() {
       <div className="grid grid-cols-5 gap-3">
         {DAYS.map(day => (
           <div key={day} className="card">
-            <div className="px-3 py-2.5 border-b border-slate-100 text-xs font-semibold text-slate-600">{day}</div>
+            <div className="px-3 py-2.5 border-b border-slate-100/60 text-xs font-medium text-slate-500">{day}</div>
             <div className="p-2 space-y-2 min-h-[200px]">
               {byDay[day].length === 0
                 ? <p className="text-xs text-slate-300 text-center pt-8">No slots</p>
                 : byDay[day].map(slot => (
                   <div key={slot.slot_id}
-                    className="bg-primary-50 border border-primary-100 rounded-lg p-2 text-xs group relative">
-                    <p className="font-semibold text-primary-700">{slot.start_time}–{slot.end_time}</p>
+                    className="bg-primary-50/50 rounded-lg p-2 text-xs group relative">
+                    <p className="font-medium text-primary-700">{slot.start_time}–{slot.end_time}</p>
                     <p className="text-primary-600 font-medium mt-0.5 truncate">{slot.course_code}</p>
                     <p className="text-slate-500 truncate">{slot.faculty_name}</p>
                     <p className="text-slate-400">{slot.student_group} · {slot.expected_count} students</p>
@@ -96,9 +96,9 @@ export default function AdminTimetablePage() {
 
       {/* Add modal */}
       {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
-            <h2 className="text-base font-semibold mb-4">Add Timetable Slot</h2>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-4">Add Timetable Slot</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="form-label">Lab</label>

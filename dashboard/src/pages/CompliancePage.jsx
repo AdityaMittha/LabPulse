@@ -103,8 +103,8 @@ export default function CompliancePage({ globalDate }) {
       <PageWrapper>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur compliance data...</span>
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading compliance data…</span>
           </div>
         </div>
       </PageWrapper>
@@ -167,7 +167,7 @@ export default function CompliancePage({ globalDate }) {
       {/* Table */}
       <div className="card">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-slate-900">Attendance Details</h3>
+          <h3 className="font-semibold text-sm text-slate-700">Attendance Details</h3>
           <span className="text-xs text-slate-400">{rows.length} records</span>
         </div>
         <div className="table-container">
@@ -193,13 +193,13 @@ export default function CompliancePage({ globalDate }) {
                         {r.student_name}
                       </Link>
                     </td>
-                    <td className="font-mono text-xs text-slate-500">{r.student_id}</td>
+                    <td className="font-mono text-xs text-slate-400">{r.student_id}</td>
                     <td>
-                      <Link to={`/machines/${r.machine_id}`} className="font-mono text-xs text-slate-700 hover:underline">{r.machine_id}</Link>
+                      <Link to={`/machines/${r.machine_id}`} className="font-mono text-xs text-slate-600 hover:underline">{r.machine_id}</Link>
                     </td>
-                    <td className="text-xs text-slate-600">{new Date(r.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
+                    <td className="text-xs text-slate-500">{new Date(r.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
                     <td className="num">{Math.round((r.total_duration||0)/60)}m</td>
-                    <td className="text-xs text-slate-500 max-w-[120px] truncate">{r.course_code}</td>
+                    <td className="text-xs text-slate-400 max-w-[120px] truncate">{r.course_code}</td>
                     <td><ComplianceBadge status={r.compliance_status} /></td>
                   </tr>
                 ))

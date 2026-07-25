@@ -103,8 +103,8 @@ export default function OverviewPage({ globalDate }) {
       <PageWrapper>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur lab utilization stats...</span>
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading lab utilization stats…</span>
           </div>
         </div>
       </PageWrapper>
@@ -132,15 +132,17 @@ export default function OverviewPage({ globalDate }) {
       {/* Hourly bar chart */}
       <div className="card card-body mb-6">
         <SectionHeading title="Hourly Sessions — All Labs" />
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={220}>
           <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-            <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "#F1F5F9" }} />
-            <Bar dataKey="sessions" fill="#2563EB" radius={[4, 4, 0, 0]} name="Sessions" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+            <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "#f5f5f4" }} />
+            <Bar dataKey="sessions" fill="#0d9488" radius={[4, 4, 0, 0]} name="Sessions" />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
       {/* Top Browsed Websites */}
       <div className="card card-body mb-6">
         <SectionHeading title={`Top Browsed Websites — ${today}`} />
@@ -150,19 +152,17 @@ export default function OverviewPage({ globalDate }) {
             : topSitesData.slice(0, 8).map((site, i) => {
               const maxDur = topSitesData[0].active_duration || 1;
               return (
-                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                  <span className="text-xs font-semibold text-slate-400 w-4 text-center">{i + 1}</span>
-                  <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                    <Globe className="w-4 h-4" />
-                  </div>
+                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
+                  <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
+                  <Globe className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-800 truncate">{site.domain}</p>
-                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    <p className="text-xs font-medium text-slate-700 truncate">{site.domain}</p>
+                    <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs font-mono font-medium text-slate-700">{formatDuration(site.active_duration)}</p>
+                    <p className="text-xs font-mono text-slate-600">{formatDuration(site.active_duration)}</p>
                   </div>
                 </div>
               );
@@ -181,25 +181,25 @@ export default function OverviewPage({ globalDate }) {
           <div className="space-y-3">
             {labStats.map(lab => (
               <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
-                className="card card-body flex items-center gap-4 hover:border-primary-200 hover:shadow-md transition-all group">
-                <div className="w-9 h-9 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
-                  <FlaskConical size={18} className="text-primary-600" />
+                className="card card-body flex items-center gap-4 hover:bg-slate-50/50 transition-all group">
+                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                  <FlaskConical size={16} className="text-slate-500" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold text-sm text-slate-900 group-hover:text-primary-600 transition-colors">{lab.name}</p>
-                    <span className="text-xs font-bold text-slate-700">{lab.util}%</span>
+                    <p className="font-medium text-sm text-slate-800 group-hover:text-primary-600 transition-colors">{lab.name}</p>
+                    <span className="text-xs font-semibold text-slate-600">{lab.util}%</span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full transition-all ${lab.util >= 70 ? "bg-primary-600" : lab.util >= 40 ? "bg-amber-400" : "bg-slate-300"}`}
                       style={{ width: `${lab.util}%` }} />
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
                     <span>{lab.sessionCount} sessions</span>
                     <span>·</span>
                     <span>{lab.machineCount} machines</span>
                     <span>·</span>
-                    <span className="text-green-600">{lab.compliance.compliant} compliant</span>
+                    <span className="text-emerald-600">{lab.compliance.compliant} compliant</span>
                   </div>
                 </div>
               </Link>
@@ -211,23 +211,23 @@ export default function OverviewPage({ globalDate }) {
         <div>
           <SectionHeading title="Recent Sessions" />
           <div className="card overflow-hidden">
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100/60">
               {recentSessions.length === 0 ? (
                 <p className="text-center text-slate-400 py-10 text-sm">No sessions yet today</p>
               ) : recentSessions.map(s => (
-                <div key={s.session_id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
+                <div key={s.session_id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-semibold text-[11px] shrink-0">
                     {s.student_name?.split(" ").map(n => n[0]).join("").slice(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <Link to={`/students/${s.student_id}`} className="text-sm font-medium text-slate-900 hover:text-primary-600 transition-colors truncate">{s.student_name}</Link>
+                      <Link to={`/students/${s.student_id}`} className="text-sm font-medium text-slate-800 hover:text-primary-600 transition-colors truncate">{s.student_name}</Link>
                       <ComplianceBadge status={s.compliance_status} />
                     </div>
-                    <p className="text-xs text-slate-500 truncate">{s.machine_id} · {s.course_code}</p>
+                    <p className="text-xs text-slate-400 truncate">{s.machine_id} · {s.course_code}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-mono text-slate-700">{formatDuration(s.total_duration)}</p>
+                    <p className="text-xs font-mono text-slate-600">{formatDuration(s.total_duration)}</p>
                     <p className="text-xs text-slate-400">{new Date(s.login_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                 </div>

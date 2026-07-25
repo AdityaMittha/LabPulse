@@ -10,16 +10,16 @@ const YEARS = ["FE", "SE", "TE", "BE"];
 const YEAR_LABELS = { FE: "First Year", SE: "Second Year", TE: "Third Year", BE: "Final Year" };
 
 const DEPT_COLORS = {
-  CSE:    { bg: "bg-blue-50",   border: "border-blue-200",  accent: "bg-blue-600",   text: "text-blue-700",   badge: "bg-blue-100 text-blue-700",   ring: "ring-blue-200" },
-  IT:     { bg: "bg-emerald-50", border: "border-emerald-200", accent: "bg-emerald-600", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700", ring: "ring-emerald-200" },
-  "E&TC": { bg: "bg-amber-50",  border: "border-amber-200", accent: "bg-amber-600",  text: "text-amber-700",  badge: "bg-amber-100 text-amber-700",  ring: "ring-amber-200" },
+  CSE:    { bg: "bg-slate-50",   border: "border-slate-200",  accent: "bg-slate-600",   text: "text-slate-700",   ring: "ring-slate-300" },
+  IT:     { bg: "bg-slate-50",   border: "border-slate-200",  accent: "bg-primary-600", text: "text-primary-700", ring: "ring-primary-200" },
+  "E&TC": { bg: "bg-slate-50",   border: "border-slate-200",  accent: "bg-amber-600",   text: "text-amber-700",   ring: "ring-amber-200" },
 };
 
 const YEAR_COLORS = {
-  FE: "bg-sky-50 text-sky-700 border-sky-200",
-  SE: "bg-violet-50 text-violet-700 border-violet-200",
-  TE: "bg-orange-50 text-orange-700 border-orange-200",
-  BE: "bg-rose-50 text-rose-700 border-rose-200",
+  FE: "bg-slate-100 text-slate-600",
+  SE: "bg-slate-100 text-slate-600",
+  TE: "bg-slate-100 text-slate-600",
+  BE: "bg-slate-100 text-slate-600",
 };
 
 export default function AdminStudentsPage() {
@@ -124,16 +124,14 @@ export default function AdminStudentsPage() {
           const count = deptCounts[d];
           return (
             <button key={d} onClick={() => setDeptFilter(prev => prev === d ? "ALL" : d)}
-              className={`stat-card text-left transition-all ${deptFilter === d ? `ring-2 ${c.ring} shadow-md` : "hover:shadow-md"}`}>
+              className={`stat-card text-left transition-all ${deptFilter === d ? `ring-2 ${c.ring}` : "hover:bg-slate-50/50"}`}>
               <div className="flex items-start justify-between">
                 <div>
                   <p className="stat-label">{d} Department</p>
                   <p className="stat-value mt-1">{count}</p>
-                  <p className="text-xs text-slate-500 mt-1">students</p>
+                  <p className="text-xs text-slate-400 mt-1">students</p>
                 </div>
-                <div className={`p-2.5 rounded-lg ${c.bg} ${c.text}`}>
-                  <Users size={20} />
-                </div>
+                <Users size={18} className="text-slate-300 mt-0.5" />
               </div>
             </button>
           );
@@ -174,18 +172,18 @@ export default function AdminStudentsPage() {
           if (deptStudents.length === 0 && search) return null;
 
           return (
-            <div key={dept} className={`card overflow-hidden border ${c.border} transition-all`}>
+            <div key={dept} className="card overflow-hidden transition-all">
               {/* Department header */}
               <button
-                className={`w-full flex items-center gap-3 px-5 py-4 ${c.bg} hover:brightness-[0.97] transition-all`}
+                className="w-full flex items-center gap-3 px-5 py-4 bg-slate-50 hover:bg-slate-100/50 transition-all"
                 onClick={() => toggleDept(dept)}
               >
-                <div className={`w-8 h-8 rounded-lg ${c.accent} text-white flex items-center justify-center shrink-0`}>
-                  <GraduationCap size={16} />
+                <div className={`w-7 h-7 rounded-lg ${c.accent} text-white flex items-center justify-center shrink-0`}>
+                  <GraduationCap size={14} />
                 </div>
                 <div className="flex-1 text-left">
-                  <h2 className={`font-semibold text-sm ${c.text}`}>{dept} Department</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">{deptStudents.length} students</p>
+                  <h2 className="font-semibold text-sm text-slate-700">{dept} Department</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">{deptStudents.length} students</p>
                 </div>
                 {/* Year breakdown badges */}
                 <div className="hidden sm:flex items-center gap-1.5 mr-2">
@@ -193,7 +191,7 @@ export default function AdminStudentsPage() {
                     const count = grouped[dept]?.[y]?.length || 0;
                     if (count === 0) return null;
                     return (
-                      <span key={y} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${YEAR_COLORS[y]}`}>
+                      <span key={y} className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${YEAR_COLORS[y]}`}>
                         {y}: {count}
                       </span>
                     );
@@ -204,7 +202,7 @@ export default function AdminStudentsPage() {
 
               {/* Year subcategories */}
               {isDeptOpen && (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100/60">
                   {visibleYears.map(year => {
                     const yearStudents = grouped[dept]?.[year] || [];
                     const yearKey = `${dept}-${year}`;
@@ -216,17 +214,17 @@ export default function AdminStudentsPage() {
                       <div key={yearKey}>
                         {/* Year subheader */}
                         <button
-                          className="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors"
+                          className="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50/50 transition-colors"
                           onClick={() => toggleYear(yearKey)}
                         >
                           {isYearOpen
                             ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
                             : <ChevronRight size={14} className="text-slate-400 shrink-0" />
                           }
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${YEAR_COLORS[year]}`}>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${YEAR_COLORS[year]}`}>
                             {year}
                           </span>
-                          <span className="text-sm font-medium text-slate-700">{YEAR_LABELS[year]}</span>
+                          <span className="text-sm font-medium text-slate-600">{YEAR_LABELS[year]}</span>
                           <span className="text-xs text-slate-400 ml-auto">{yearStudents.length} students</span>
                         </button>
 
@@ -235,7 +233,7 @@ export default function AdminStudentsPage() {
                           <div className="bg-white">
                             <table className="table">
                               <thead>
-                                <tr className="!bg-slate-50/70">
+                                <tr>
                                   <th className="!text-[10px] !py-2">Name</th>
                                   <th className="!text-[10px] !py-2">Student ID</th>
                                   <th className="!text-[10px] !py-2">Email</th>
@@ -244,14 +242,14 @@ export default function AdminStudentsPage() {
                               </thead>
                               <tbody>
                                 {yearStudents.map(s => (
-                                  <tr key={s.student_id} className="hover:bg-slate-50/50">
+                                  <tr key={s.student_id}>
                                     <td>
                                       <Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline text-sm">
                                         {s.name}
                                       </Link>
                                     </td>
-                                    <td className="font-mono text-xs text-slate-600">{s.student_id}</td>
-                                    <td className="text-xs text-slate-500">{s.college_login}</td>
+                                    <td className="font-mono text-xs text-slate-500">{s.student_id}</td>
+                                    <td className="text-xs text-slate-400">{s.college_login}</td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
                                         <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="Edit">
@@ -293,9 +291,9 @@ export default function AdminStudentsPage() {
 
       {/* Add Student modal */}
       {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-base font-semibold mb-4">Add Student</h2>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-4">Add Student</h2>
             <div className="space-y-3">
               {[
                 ["Name", "name", "text", "Full name"],

@@ -42,12 +42,12 @@ function DepartmentSelector() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-700 via-primary-600 to-blue-500 flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-6 text-center text-white">
-          <h2 className="text-xl font-bold">Select Department</h2>
-          <p className="text-primary-100 text-xs mt-1">Please select your academic department to continue</p>
+        <div className="p-6 text-center border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-900">Select Department</h2>
+          <p className="text-slate-500 text-xs mt-1">Please select your academic department to continue</p>
         </div>
 
         {/* Content */}
@@ -107,7 +107,7 @@ function ProtectedLayout({ requireAdmin = false }) {
   const breadcrumbs = BREADCRUMBS[location.pathname] || [{ label: "Overview", to: "/" }, { label: location.pathname.split("/").pop() }];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-100">
       <Sidebar collapsed={collapsed} onCollapse={() => setCollapsed(c => !c)} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar

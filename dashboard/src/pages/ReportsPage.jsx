@@ -74,7 +74,7 @@ export default function ReportsPage() {
     };
   }, [selectedLab, visibleLabIds]);
 
-  const COLORS = ["#2563EB","#0EA5E9","#8B5CF6","#F59E0B"];
+  const COLORS = ["#0d9488","#14b8a6","#78716c","#d97706"];
 
   return (
     <PageWrapper>
@@ -105,14 +105,14 @@ export default function ReportsPage() {
         {/* Daily sessions trend */}
         <div className="card card-body">
           <SectionHeading title="Daily Sessions Trend" />
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={220}>
             <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="sessions" stroke="#2563EB" strokeWidth={2} dot={{ r: 4 }} name="Total Sessions" />
-              <Line type="monotone" dataKey="compliant" stroke="#16A34A" strokeWidth={2} dot={{ r: 4 }} name="Compliant" strokeDasharray="4 2" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} />
+              <Line type="monotone" dataKey="sessions" stroke="#0d9488" strokeWidth={2} dot={{ r: 3 }} name="Total Sessions" />
+              <Line type="monotone" dataKey="compliant" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} name="Compliant" strokeDasharray="4 2" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -120,13 +120,13 @@ export default function ReportsPage() {
         {/* Compliance % trend */}
         <div className="card card-body">
           <SectionHeading title="Compliance % Trend" />
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} unit="%" />
-              <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} formatter={v => `${v}%`} />
-              <Bar dataKey="compliancePct" fill="#8B5CF6" radius={[4,4,0,0]} name="Compliance %" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} unit="%" />
+              <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} formatter={v => `${v}%`} />
+              <Bar dataKey="compliancePct" fill="#78716c" radius={[4,4,0,0]} name="Compliance %" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -135,12 +135,12 @@ export default function ReportsPage() {
       {/* Lab comparison */}
       <div className="card card-body">
         <SectionHeading title="Sessions per Lab — Last 7 Days" />
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={240}>
           <BarChart data={labTrend} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} />
             <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
             {visibleLabs.map((lab, i) => (
               <Bar key={lab.lab_id} dataKey={lab.name} fill={COLORS[i % COLORS.length]} radius={[3,3,0,0]} stackId="a" />

@@ -6,7 +6,7 @@ import { machines, sessions, appUsages, labs, todayStr, formatDuration } from ".
 import { StatCard, ComplianceBadge, MachineStatusBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
 import { deleteMachine } from "../api/apiClient";
 
-const APP_COLORS = ["#2563EB", "#0EA5E9", "#8B5CF6", "#F59E0B", "#10B981", "#F43F5E"];
+const APP_COLORS = ["#0d9488", "#14b8a6", "#78716c", "#d97706", "#16a34a", "#dc2626"];
 
 export default function MachineDetailPage() {
   const { machineId } = useParams();
@@ -78,7 +78,7 @@ export default function MachineDetailPage() {
                   <Pie data={appData} dataKey="duration" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={e => e.name.replace(".exe","")}>
                     {appData.map((_, i) => <Cell key={i} fill={APP_COLORS[i % APP_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={v => formatDuration(v)} contentStyle={{ border:"1px solid #E2E8F0", borderRadius:8, fontSize:12 }} />
+                  <Tooltip formatter={v => formatDuration(v)} contentStyle={{ border:"1px solid #e7e5e4", borderRadius:10, fontSize:12 }} />
                   <Legend formatter={v => v.replace(".exe","")} iconSize={10} wrapperStyle={{ fontSize:11 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -89,7 +89,7 @@ export default function MachineDetailPage() {
         {/* Machine info */}
         <div className="card card-body">
           <SectionHeading title="Machine Info" />
-          <dl className="divide-y divide-slate-100 text-sm">
+          <dl className="divide-y divide-slate-100/60 text-sm">
             {[
               ["Machine ID", <code className="font-mono text-xs bg-slate-50 px-1 rounded">{machine.machine_id}</code>],
               ["Hostname",   machine.hostname],
@@ -100,8 +100,8 @@ export default function MachineDetailPage() {
               ["Last Seen",  lastSeen?.toLocaleString("en-IN") || "—"],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center py-2.5 gap-4">
-                <dt className="w-32 text-slate-500 shrink-0 text-xs font-medium">{label}</dt>
-                <dd className="text-slate-900">{value}</dd>
+                <dt className="w-32 text-slate-400 shrink-0 text-xs font-medium">{label}</dt>
+                <dd className="text-slate-800">{value}</dd>
               </div>
             ))}
           </dl>
@@ -111,7 +111,7 @@ export default function MachineDetailPage() {
       {/* Session history */}
       <div className="card">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-slate-900">Session History</h3>
+          <h3 className="font-semibold text-sm text-slate-700">Session History</h3>
           <span className="text-xs text-slate-400">{machineSessions.length} total</span>
         </div>
         <div className="table-container">
@@ -132,10 +132,10 @@ export default function MachineDetailPage() {
                 : machineSessions.slice(0, 15).map(s => (
                   <tr key={s.session_id}>
                     <td><Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name}</Link></td>
-                    <td className="text-xs text-slate-500">{s.date}</td>
+                    <td className="text-xs text-slate-400">{s.date}</td>
                     <td className="text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
                     <td className="num">{formatDuration(s.total_duration)}</td>
-                    <td className="text-xs text-slate-500 max-w-[120px] truncate">{s.course_code}</td>
+                    <td className="text-xs text-slate-400 max-w-[120px] truncate">{s.course_code}</td>
                     <td><ComplianceBadge status={s.compliance_status} /></td>
                   </tr>
                 ))
@@ -146,9 +146,9 @@ export default function MachineDetailPage() {
       </div>
 
       {/* Danger Zone */}
-      <div className="card border-red-200 bg-red-50/20 mt-6 overflow-hidden">
-        <div className="px-5 py-4 border-b border-red-100 bg-red-50/50 flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-red-800">Danger Zone</h3>
+      <div className="card mt-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-red-600">Danger Zone</h3>
         </div>
         <div className="p-5">
           <p className="text-xs text-red-600 font-medium">Permanently Delete Machine Record</p>
@@ -171,7 +171,7 @@ export default function MachineDetailPage() {
                   alert("Incorrect machine ID. Deletion cancelled.");
                 }
               }}
-              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow transition-colors"
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
             >
               Delete Machine & All Data
             </button>

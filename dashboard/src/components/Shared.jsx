@@ -3,31 +3,21 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, sub, trend, icon: Icon, color = "blue" }) {
-  const colors = {
-    blue:    "bg-primary-50 text-primary-600",
-    green:   "bg-green-50 text-green-600",
-    amber:   "bg-amber-50 text-amber-600",
-    red:     "bg-red-50 text-red-600",
-    purple:  "bg-purple-50 text-purple-600",
-    slate:   "bg-slate-100 text-slate-600",
-  };
   return (
     <div className="stat-card">
       <div className="flex items-start justify-between">
         <div>
           <p className="stat-label">{label}</p>
           <p className="stat-value mt-1">{value}</p>
-          {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
+          {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
         </div>
         {Icon && (
-          <div className={`p-2.5 rounded-lg ${colors[color]}`}>
-            <Icon size={20} />
-          </div>
+          <Icon size={18} className="text-slate-300 shrink-0 mt-0.5" />
         )}
       </div>
       {trend !== undefined && (
         <div className={`flex items-center gap-1 text-xs font-medium mt-2 ${
-          trend > 0 ? "text-green-600" : trend < 0 ? "text-red-500" : "text-slate-500"
+          trend > 0 ? "text-emerald-600" : trend < 0 ? "text-red-500" : "text-slate-400"
         }`}>
           {trend > 0 ? <TrendingUp size={12} /> : trend < 0 ? <TrendingDown size={12} /> : <Minus size={12} />}
           <span>{trend > 0 ? "+" : ""}{trend}% vs yesterday</span>
@@ -68,7 +58,7 @@ export function UtilBar({ pct, showLabel = true }) {
       <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      {showLabel && <span className="text-xs font-mono w-8 text-right text-slate-600">{pct}%</span>}
+      {showLabel && <span className="text-xs font-mono w-8 text-right text-slate-500">{pct}%</span>}
     </div>
   );
 }
@@ -77,7 +67,7 @@ export function UtilBar({ pct, showLabel = true }) {
 export function SectionHeading({ title, action }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+      <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
       {action}
     </div>
   );
@@ -87,9 +77,9 @@ export function SectionHeading({ title, action }) {
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-      {Icon && <Icon size={40} className="text-slate-300 mb-4" />}
-      <p className="font-semibold text-slate-700 text-base">{title}</p>
-      {description && <p className="text-sm text-slate-500 mt-1 max-w-xs">{description}</p>}
+      {Icon && <Icon size={36} className="text-slate-300 mb-4" />}
+      <p className="font-medium text-slate-600 text-base">{title}</p>
+      {description && <p className="text-sm text-slate-400 mt-1 max-w-xs">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

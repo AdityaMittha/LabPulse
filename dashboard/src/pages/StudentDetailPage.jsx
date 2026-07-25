@@ -63,7 +63,7 @@ export default function StudentDetailPage() {
       {/* Header */}
       <div className="page-header">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-lg">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-base">
             {student.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
           </div>
           <div>
@@ -90,11 +90,11 @@ export default function StudentDetailPage() {
             : (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={dailyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "#F1F5F9" }} />
-                  <Bar dataKey="count" fill="#2563EB" radius={[4, 4, 0, 0]} name="Sessions" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "#f5f5f4" }} />
+                  <Bar dataKey="count" fill="#0d9488" radius={[4, 4, 0, 0]} name="Sessions" />
                 </BarChart>
               </ResponsiveContainer>
             )
@@ -107,16 +107,16 @@ export default function StudentDetailPage() {
           <div className="card card-body">
             <SectionHeading title="Compliance Breakdown" />
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="bg-green-50 rounded-lg p-3">
-                <p className="text-2xl font-bold text-green-600">{complianceCount.compliant}</p>
-                <p className="text-xs text-green-700 mt-0.5">Compliant</p>
+              <div className="bg-emerald-50 rounded-lg p-3">
+                <p className="text-2xl font-semibold text-emerald-600">{complianceCount.compliant}</p>
+                <p className="text-xs text-emerald-700 mt-0.5">Compliant</p>
               </div>
               <div className="bg-amber-50 rounded-lg p-3">
-                <p className="text-2xl font-bold text-amber-600">{complianceCount.partial}</p>
+                <p className="text-2xl font-semibold text-amber-600">{complianceCount.partial}</p>
                 <p className="text-xs text-amber-700 mt-0.5">Partial</p>
               </div>
               <div className="bg-red-50 rounded-lg p-3">
-                <p className="text-2xl font-bold text-red-500">{complianceCount.non_compliant}</p>
+                <p className="text-2xl font-semibold text-red-500">{complianceCount.non_compliant}</p>
                 <p className="text-xs text-red-700 mt-0.5">Absent</p>
               </div>
             </div>
@@ -132,12 +132,12 @@ export default function StudentDetailPage() {
                   const maxDur = topApps[0].dur;
                   return (
                     <div key={app.name} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-500 w-4">{i+1}</span>
-                      <span className="text-sm text-slate-800 flex-1 truncate">{app.name}</span>
-                      <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <span className="text-xs text-slate-400 w-4">{i+1}</span>
+                      <span className="text-sm text-slate-700 flex-1 truncate">{app.name}</span>
+                      <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(app.dur/maxDur)*100}%` }} />
                       </div>
-                      <span className="text-xs font-mono text-slate-600 w-14 text-right">{formatDuration(app.dur)}</span>
+                      <span className="text-xs font-mono text-slate-500 w-14 text-right">{formatDuration(app.dur)}</span>
                     </div>
                   );
                 })
@@ -160,10 +160,10 @@ export default function StudentDetailPage() {
                 return (
                   <div key={site.domain} className="flex items-center gap-3">
                     <span className="text-xs text-slate-400 w-4 shrink-0">{i+1}</span>
-                    <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span className="text-sm text-slate-800 flex-1 truncate font-medium">{site.domain}</span>
-                    <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-sm text-slate-700 flex-1 truncate font-medium">{site.domain}</span>
+                    <div className="w-20 h-1 bg-slate-100 rounded-full overflow-hidden shrink-0">
+                      <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
                     </div>
                     <span className="text-xs font-mono text-slate-500 w-12 text-right shrink-0">{formatDuration(site.active_duration)}</span>
                     <span className="text-[10px] text-slate-400 w-8 text-right shrink-0">{site.visit_count}×</span>
@@ -182,16 +182,16 @@ export default function StudentDetailPage() {
               ? <p className="text-sm text-slate-400 text-center py-4">No page log data</p>
               : browserData.page_log.slice(0, 10).map((entry, i) => (
                 <div key={i} className="flex items-start gap-2.5 py-1.5 border-b border-slate-50 last:border-0">
-                  <div className="w-5 h-5 rounded bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
-                    <Globe className="w-3 h-3 text-blue-500" />
+                  <div className="w-5 h-5 rounded bg-slate-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <Globe className="w-3 h-3 text-slate-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-800 truncate font-medium">{entry.title}</p>
+                    <p className="text-sm text-slate-700 truncate font-medium">{entry.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-blue-600 truncate max-w-[180px]">{entry.domain}</span>
-                      <span className="text-[10px] text-slate-400">·</span>
+                      <span className="text-[10px] text-primary-600 truncate max-w-[180px]">{entry.domain}</span>
+                      <span className="text-[10px] text-slate-300">·</span>
                       <span className="text-[10px] text-slate-400">{entry.browser}</span>
-                      <span className="text-[10px] text-slate-400">·</span>
+                      <span className="text-[10px] text-slate-300">·</span>
                       <span className="text-[10px] text-slate-400">
                         {new Date(entry.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
@@ -199,7 +199,7 @@ export default function StudentDetailPage() {
                   </div>
                   {entry.url && (
                     <a href={entry.url} target="_blank" rel="noopener noreferrer"
-                       className="text-slate-300 hover:text-blue-500 transition-colors shrink-0 mt-1">
+                       className="text-slate-300 hover:text-primary-500 transition-colors shrink-0 mt-1">
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
@@ -213,7 +213,7 @@ export default function StudentDetailPage() {
       {/* Session history */}
       <div className="card">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-slate-900">Session History</h3>
+          <h3 className="font-semibold text-sm text-slate-700">Session History</h3>
           <span className="text-xs text-slate-400">{studentSessions.length} sessions</span>
         </div>
         <div className="table-container">
@@ -226,12 +226,12 @@ export default function StudentDetailPage() {
                 ? <tr><td colSpan={7} className="text-center text-slate-400 py-8">No lab sessions found for this student.</td></tr>
                 : studentSessions.slice(0, 15).map(s => (
                   <tr key={s.session_id}>
-                    <td className="text-xs text-slate-500">{s.date}</td>
+                    <td className="text-xs text-slate-400">{s.date}</td>
                     <td className="text-xs">{labs.find(l=>l.lab_id===s.lab_id)?.name || s.lab_id}</td>
                     <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs text-primary-600 hover:underline">{s.machine_id}</Link></td>
                     <td className="text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
                     <td className="num">{formatDuration(s.total_duration)}</td>
-                    <td className="text-xs text-slate-500 max-w-[100px] truncate">{s.course_code}</td>
+                    <td className="text-xs text-slate-400 max-w-[100px] truncate">{s.course_code}</td>
                     <td><ComplianceBadge status={s.compliance_status} /></td>
                   </tr>
                 ))
@@ -242,9 +242,9 @@ export default function StudentDetailPage() {
       </div>
 
       {/* Danger Zone */}
-      <div className="card border-red-200 bg-red-50/20 mt-6 overflow-hidden">
-        <div className="px-5 py-4 border-b border-red-100 bg-red-50/50 flex items-center justify-between">
-          <h3 className="font-semibold text-sm text-red-800">Danger Zone</h3>
+      <div className="card mt-6 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-red-600">Danger Zone</h3>
         </div>
         <div className="p-5">
           <p className="text-xs text-red-600 font-medium">Permanently Delete Student Record</p>
@@ -267,7 +267,7 @@ export default function StudentDetailPage() {
                   alert("Incorrect student ID. Deletion cancelled.");
                 }
               }}
-              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow transition-colors"
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
             >
               Delete Student & All Data
             </button>

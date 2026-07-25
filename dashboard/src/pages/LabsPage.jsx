@@ -65,8 +65,8 @@ export default function LabsPage({ globalDate }) {
       <PageWrapper>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur labs list...</span>
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading labs…</span>
           </div>
         </div>
       </PageWrapper>
@@ -94,23 +94,23 @@ export default function LabsPage({ globalDate }) {
       </div>
 
       {/* Lab grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {labStats.map(lab => (
           <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
-            className="card hover:shadow-lg hover:border-primary-200 transition-all group block">
+            className="card hover:bg-slate-50/50 transition-all group block">
             {/* Card header */}
-            <div className="p-5 border-b border-slate-100">
+            <div className="p-5 border-b border-slate-100/60">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-primary-100 transition-colors">
-                  <FlaskConical size={20} className="text-primary-600" />
+                <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                  <FlaskConical size={18} className="text-slate-500" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="font-semibold text-slate-900 group-hover:text-primary-600 transition-colors">{lab.name}</h2>
-                  <p className="text-xs text-slate-500">{lab.building} · {lab.floor} Floor · {lab.department}</p>
+                  <h2 className="font-semibold text-slate-800 group-hover:text-primary-600 transition-colors">{lab.name}</h2>
+                  <p className="text-xs text-slate-400">{lab.building} · {lab.floor} Floor · {lab.department}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-slate-900">{lab.util}%</p>
-                  <p className="text-xs text-slate-500">utilization</p>
+                  <p className="text-2xl font-semibold text-slate-800">{lab.util}%</p>
+                  <p className="text-xs text-slate-400">utilization</p>
                 </div>
               </div>
               <div className="mt-4">
@@ -119,33 +119,33 @@ export default function LabsPage({ globalDate }) {
             </div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-3 divide-x divide-slate-100 p-4">
+            <div className="grid grid-cols-3 divide-x divide-slate-100/60 p-4">
               <div className="text-center px-2">
-                <p className="text-lg font-semibold text-slate-900">{lab.sessionCount}</p>
-                <p className="text-xs text-slate-500">Sessions</p>
+                <p className="text-lg font-semibold text-slate-800">{lab.sessionCount}</p>
+                <p className="text-xs text-slate-400">Sessions</p>
               </div>
               <div className="text-center px-2">
-                <p className="text-lg font-semibold text-slate-900">{lab.activeMachines}<span className="text-sm text-slate-400">/{lab.totalMachines}</span></p>
-                <p className="text-xs text-slate-500">Machines</p>
+                <p className="text-lg font-semibold text-slate-800">{lab.activeMachines}<span className="text-sm text-slate-400">/{lab.totalMachines}</span></p>
+                <p className="text-xs text-slate-400">Machines</p>
               </div>
               <div className="text-center px-2">
-                <p className="text-lg font-semibold text-green-600">{lab.compliancePct}%</p>
-                <p className="text-xs text-slate-500">Compliance</p>
+                <p className="text-lg font-semibold text-emerald-600">{lab.compliancePct}%</p>
+                <p className="text-xs text-slate-400">Compliance</p>
               </div>
             </div>
 
             {/* Compliance bar */}
             <div className="px-5 pb-4 flex gap-1.5">
               {lab.comp.compliant > 0 && (
-                <div className="h-1.5 rounded-full bg-green-500 transition-all"
+                <div className="h-1 rounded-full bg-emerald-500 transition-all"
                   style={{ flex: lab.comp.compliant }} title="Compliant" />
               )}
               {lab.comp.partial > 0 && (
-                <div className="h-1.5 rounded-full bg-amber-400 transition-all"
+                <div className="h-1 rounded-full bg-amber-400 transition-all"
                   style={{ flex: lab.comp.partial }} title="Partial" />
               )}
               {lab.comp.absent > 0 && (
-                <div className="h-1.5 rounded-full bg-red-400 transition-all"
+                <div className="h-1 rounded-full bg-red-400 transition-all"
                   style={{ flex: lab.comp.absent }} title="Absent" />
               )}
             </div>

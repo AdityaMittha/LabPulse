@@ -31,23 +31,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-700 via-primary-600 to-blue-500 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-2xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-8 text-center">
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-              <Monitor size={28} className="text-white" />
+          <div className="p-8 text-center border-b border-slate-100">
+            <div className="w-12 h-12 bg-primary-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <Monitor size={24} className="text-primary-600" />
             </div>
-            <h1 className="text-xl font-bold text-white">{COLLEGE.appName}</h1>
-            <p className="text-primary-200 text-sm mt-1">{COLLEGE.name}</p>
-            <p className="text-primary-300 text-xs">{COLLEGE.location}</p>
+            <h1 className="text-lg font-semibold text-slate-900">{COLLEGE.appName}</h1>
+            <p className="text-slate-500 text-sm mt-1">{COLLEGE.name}</p>
+            <p className="text-slate-400 text-xs">{COLLEGE.location}</p>
           </div>
 
           {/* Form */}
           <div className="p-8">
-            <p className="text-center text-slate-600 text-sm mb-6">Sign in to your faculty account</p>
+            <p className="text-center text-slate-500 text-sm mb-6">Sign in to your faculty account</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -87,7 +87,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="text-xs text-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2">
                   {error}
                 </p>
               )}
@@ -104,15 +104,15 @@ export default function LoginPage() {
             </form>
 
             {/* Demo credentials */}
-            <div className="mt-6 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-500 space-y-1">
-              <p className="font-semibold text-slate-700 mb-2">Demo Credentials</p>
-              <p>Admin: <code className="font-mono bg-white px-1 rounded">admin@wit.ac.in</code> / <code className="font-mono bg-white px-1 rounded">Admin@123</code></p>
-              <p>Faculty: <code className="font-mono bg-white px-1 rounded">faculty@wit.ac.in</code> / <code className="font-mono bg-white px-1 rounded">Faculty@123</code></p>
+            <div className="mt-6 p-3 bg-slate-50 rounded-lg text-xs text-slate-500 space-y-1">
+              <p className="font-medium text-slate-600 mb-2">Demo Credentials</p>
+              <p>Admin: <code className="font-mono bg-white px-1 rounded text-slate-700">admin@wit.ac.in</code> / <code className="font-mono bg-white px-1 rounded text-slate-700">Admin@123</code></p>
+              <p>Faculty: <code className="font-mono bg-white px-1 rounded text-slate-700">faculty@wit.ac.in</code> / <code className="font-mono bg-white px-1 rounded text-slate-700">Faculty@123</code></p>
             </div>
           </div>
         </div>
 
-        <p className="text-center text-white/60 text-xs mt-6">
+        <p className="text-center text-slate-400 text-xs mt-6">
           © 2025 Walchand Institute of Technology, Solapur<br />
           Privacy-Preserving Lab Analytics System
         </p>

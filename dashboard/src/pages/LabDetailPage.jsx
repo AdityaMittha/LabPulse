@@ -19,12 +19,12 @@ const DAYS  = ["MON","TUE","WED","THU","FRI"];
 
 function HeatmapCell({ value, max }) {
   const pct = max > 0 ? value / max : 0;
-  const bg = pct === 0 ? "#F8FAFC"
-    : pct < 0.25 ? "#DBEAFE"
-    : pct < 0.5  ? "#93C5FD"
-    : pct < 0.75 ? "#3B82F6"
-    : "#1D4ED8";
-  const text = pct < 0.5 ? "#1e40af" : "#fff";
+  const bg = pct === 0 ? "#fafaf9"
+    : pct < 0.25 ? "#ccfbf1"
+    : pct < 0.5  ? "#99f6e4"
+    : pct < 0.75 ? "#14b8a6"
+    : "#0f766e";
+  const text = pct < 0.5 ? "#115e59" : "#fff";
   return (
     <div
       className="rounded text-center flex items-center justify-center text-xs font-medium border border-white cursor-pointer transition-all hover:scale-110 hover:shadow"
@@ -135,8 +135,8 @@ export default function LabDetailPage({ globalDate }) {
       <PageWrapper>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-            <span className="text-sm font-medium text-slate-500">Loading WIT Solapur lab details...</span>
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading lab details…</span>
           </div>
         </div>
       </PageWrapper>
@@ -190,13 +190,13 @@ export default function LabDetailPage({ globalDate }) {
           {labMachines.map(m => {
             const mSessions = daySessions.filter(s => s.machine_id === m.machine_id);
             const utilColor = mSessions.length === 0
-              ? "bg-slate-100 border-slate-200 text-slate-400"
+              ? "bg-slate-100 text-slate-400"
               : mSessions.length < 3
-                ? "bg-blue-100 border-blue-200 text-blue-700"
-                : "bg-primary-600 border-primary-700 text-white";
+                ? "bg-primary-50 text-primary-700"
+                : "bg-primary-600 text-white";
             return (
               <Link key={m.machine_id} to={`/machines/${m.machine_id}`}
-                className={`rounded-lg border text-center py-2 px-1 text-xs font-medium transition-all hover:scale-105 hover:shadow ${utilColor} ${m.status === "inactive" ? "opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
+                className={`rounded-lg text-center py-2 px-1 text-xs font-medium transition-all hover:scale-105 hover:shadow-sm ${utilColor} ${m.status === "inactive" ? "opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                 title={`${m.machine_id}: ${mSessions.length} sessions`}
               >
                 <div className="font-mono text-[10px]">{m.machine_id.split("-").pop()}</div>
@@ -205,10 +205,10 @@ export default function LabDetailPage({ globalDate }) {
             );
           })}
         </div>
-        <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-slate-100 border border-slate-200" /> Idle (0 sessions)</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-200" /> Low (1-2 sessions)</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-primary-600" /> Active (3+ sessions)</div>
+        <div className="flex items-center gap-4 mt-4 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-slate-100" /> Idle</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-primary-50" /> Low</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-primary-600" /> Active</div>
         </div>
       </div>
 
@@ -218,11 +218,11 @@ export default function LabDetailPage({ globalDate }) {
           <SectionHeading title="Hourly Sessions" />
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="hour" tick={{ fontSize: 11, fill:"#64748B" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill:"#64748B" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ border:"1px solid #E2E8F0", borderRadius: 8, fontSize: 12 }} cursor={{ fill:"#F1F5F9" }} />
-              <Bar dataKey="sessions" fill="#2563EB" radius={[4,4,0,0]} name="Sessions" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+              <XAxis dataKey="hour" tick={{ fontSize: 11, fill:"#78716c" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill:"#78716c" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ border:"1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} cursor={{ fill:"#f5f5f4" }} />
+              <Bar dataKey="sessions" fill="#0d9488" radius={[4,4,0,0]} name="Sessions" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -250,12 +250,14 @@ export default function LabDetailPage({ globalDate }) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-3 text-xs text-slate-500">
-            <div className="w-3 h-3 rounded" style={{background:"#F8FAFC",border:"1px solid #e2e8f0"}} /> Low
-            <div className="w-3 h-3 rounded bg-blue-200" /> Med
+          <div className="flex items-center gap-2 mt-3 text-xs text-slate-400">
+            <div className="w-3 h-3 rounded" style={{background:"#fafaf9",border:"1px solid #e7e5e4"}} /> Low
+            <div className="w-3 h-3 rounded" style={{background:"#99f6e4"}} /> Med
             <div className="w-3 h-3 rounded bg-primary-600" /> High
           </div>
         </div>
+      </div>
+
       {/* Top Websites */}
       <div className="card card-body mb-6">
         <SectionHeading title={`Top Websites Visited — ${selectedDate}`} />
@@ -265,19 +267,17 @@ export default function LabDetailPage({ globalDate }) {
             : topSitesData.map((site, i) => {
               const maxDur = topSitesData[0].active_duration || 1;
               return (
-                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                  <span className="text-xs font-semibold text-slate-400 w-4 text-center">{i + 1}</span>
-                  <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                    <Globe className="w-4 h-4" />
-                  </div>
+                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
+                  <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
+                  <Globe className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{site.domain}</p>
-                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                    <p className="text-sm font-medium text-slate-700 truncate">{site.domain}</p>
+                    <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+                      <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs font-mono font-medium text-slate-700">{formatDuration(site.active_duration)}</p>
+                    <p className="text-xs font-mono text-slate-600">{formatDuration(site.active_duration)}</p>
                     <p className="text-[10px] text-slate-400">{site.visit_count} visits</p>
                   </div>
                 </div>
@@ -290,7 +290,7 @@ export default function LabDetailPage({ globalDate }) {
       {/* Sessions table */}
       <div className="card">
         <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-sm text-slate-900">Sessions — {selectedDate}</h3>
+          <h3 className="font-semibold text-sm text-slate-700">Sessions — {selectedDate}</h3>
         </div>
         <div className="table-container">
           <table className="table">
@@ -310,10 +310,10 @@ export default function LabDetailPage({ globalDate }) {
                 : daySessions.slice(0, 20).map(s => (
                   <tr key={s.session_id}>
                     <td><Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name}</Link></td>
-                    <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs hover:underline text-slate-700">{s.machine_id}</Link></td>
-                    <td className="text-slate-600 text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
+                    <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs hover:underline text-slate-600">{s.machine_id}</Link></td>
+                    <td className="text-slate-500 text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
                     <td className="num">{formatDuration(s.total_duration)}</td>
-                    <td className="text-xs text-slate-500 max-w-[120px] truncate">{s.course_code}</td>
+                    <td className="text-xs text-slate-400 max-w-[120px] truncate">{s.course_code}</td>
                     <td><ComplianceBadge status={s.compliance_status} /></td>
                   </tr>
                 ))
