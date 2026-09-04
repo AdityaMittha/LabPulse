@@ -1,18 +1,22 @@
-# Node dependencies & builds
+# Node
 node_modules/
 dist/
+
+# Environment / secrets
 .env
+.env.production
+.env.local
 dashboard/public/labpulse-agent.zip
 
-# AWS SAM build & config
+# AWS SAM
 .aws-sam/
 samconfig.toml
 changeset_details.json
 
-# Generated API keys & secrets
+# Generated secrets (never commit)
 machine_api_keys.json
 
-# Python caching & envs
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -24,7 +28,7 @@ venv/
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Editor / IDE config
+# Editor / IDE
 .vscode/
 .idea/
 *.suo
@@ -33,7 +37,7 @@ pip-delete-this-directory.txt
 *.sln
 *.swp
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
@@ -44,4 +48,3 @@ agent/labpulse.spec
 agent/config.json
 agent/offline_queue.db
 agent/logs/
-test_api.py

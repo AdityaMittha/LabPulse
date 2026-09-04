@@ -1,6 +1,4 @@
-# LabPulse Agent Installer
-# Walchand Institute of Technology, Solapur
-# Run as Administrator on each lab PC
+# LabPulse Agent Installer — run as Administrator on each lab PC
 
 param(
     [string]$InstallDir = "C:\LabPulse",
@@ -33,7 +31,7 @@ if (Test-Path $ConfigFile) {
     Write-Warning "config.json not found at $ConfigFile - copy it manually to $InstallDir\config.json"
 }
 
-# Register Scheduled Task (runs at logon for any user)
+# Register Scheduled Task for Startup / Logon (runs at logon for any user)
 $TaskName = "LabPulse"
 $Action   = New-ScheduledTaskAction -Execute "$InstallDir\labpulse.exe"
 $Trigger  = New-ScheduledTaskTrigger -AtLogOn
@@ -56,11 +54,38 @@ Register-ScheduledTask `
     -Principal $Principal `
     -Description "LabPulse computer lab usage monitoring agent - Walchand Institute of Technology, Solapur" | Out-Null
 
+# Register Scheduled Task for Shutdown Sync (runs before shutdown/restart)
+$ShutdownTaskName = "LabPulse-Shutdown"
+Unregister-ScheduledTask -TaskName $ShutdownTaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+try {
+    $schArgs = @(
+        "/create",
+        "/tn", "`"$ShutdownTaskName`"",
+        "/tr", "`"`"$InstallDir\labpulse.exe`" --shutdown-sync`"",
+        "/sc", "ONEVENT",
+        "/ec", "System",
+        "/mo", "*[System[Provider[@Name='USER32'] and (EventID=1074)]]",
+        "/ru", "SYSTEM",
+        "/f"
+    )
+    $proc = Start-Process -FilePath "schtasks.exe" -ArgumentList $schArgs -Wait -PassThru -NoNewWindow
+    if ($proc.ExitCode -eq 0) {
+        Write-Host "Registered shutdown task: $ShutdownTaskName" -ForegroundColor Green
+    } else {
+        Write-Warning "schtasks returned exit code $($proc.ExitCode) while registering shutdown task."
+    }
+} catch {
+    Write-Warning "Could not register shutdown task: $_"
+}
+
 Write-Host "Installation complete!" -ForegroundColor Green
-Write-Host "   Installed to  : $InstallDir"
-Write-Host "   Scheduled Task: $TaskName (runs at Windows logon)"
+Write-Host "   Installed to   : $InstallDir"
+Write-Host "   Logon Task     : $TaskName (starts agent on Windows logon)"
+Write-Host "   Shutdown Task  : $ShutdownTaskName (runs --shutdown-sync on PC shutdown/restart)"
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Edit $InstallDir\config.json with the correct machine_id, lab_id, and api_key"
-Write-Host "  2. Log out and back in to test - the agent should start automatically"
+Write-Host "  2. Log out and back in to test - the agent should start automatically and prompt for PNR"
 Write-Host "  3. Check logs at $InstallDir\logs"
+

@@ -1,9 +1,8 @@
 """
-seed_data.py — Seed WIT Solapur lab data into DynamoDB for LabPulse.
-Run after `sam deploy` to populate tables with initial data.
+Seed initial lab data (machines, students, timetable) into DynamoDB.
+Run after `sam deploy`.
 
-Usage:
-    python seed_data.py --profile default --region ap-south-1 --prefix labpulse
+Usage:  python seed_data.py --profile default --region ap-south-1 --prefix labpulse
 """
 import argparse
 import hashlib
@@ -26,7 +25,7 @@ users_table     = dynamodb.Table(f"{P}-Users")
 machines_table  = dynamodb.Table(f"{P}-Machines")
 timetable_table = dynamodb.Table(f"{P}-Timetable")
 
-# ── Machine API keys (save these!) ────────────────────────────────────────────
+# â”€â”€ Machine API keys (save these!) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 import secrets
 
 LAB_MACHINES = {
@@ -66,7 +65,7 @@ with open("machine_api_keys.json", "w") as f:
     json.dump(api_keys, f, indent=2)
 print("\nSUCCESS: API keys saved to machine_api_keys.json (DO NOT commit to git!)\n")
 
-# ── Students ──────────────────────────────────────────────────────────────────
+# â”€â”€ Students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 print("=== Seeding Students ===")
 STUDENTS = [
     {"student_id": f"CS2024{i:03d}", "name": f"Student {i}", "department": "CSE", "year": "BE",
@@ -81,9 +80,9 @@ STUDENTS = [
 with users_table.batch_writer() as batch:
     for s in STUDENTS:
         batch.put_item(Item={**s, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-        print(f"  [OK] {s['student_id']} — {s['name']}")
+        print(f"  [OK] {s['student_id']} â€” {s['name']}")
 
-# ── Timetable ─────────────────────────────────────────────────────────────────
+# â”€â”€ Timetable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 print("\n=== Seeding Timetable ===")
 SLOTS = [
     # CS Lab 1

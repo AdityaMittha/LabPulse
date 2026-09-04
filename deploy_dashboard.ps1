@@ -1,5 +1,5 @@
-# AWS S3 Static Website Hosting Deployment Script
-# Walchand Institute of Technology, Solapur — LabPulse Dashboard
+# S3 Static Website Hosting Deployment Script
+# LabPulse Dashboard
 
 $ErrorActionPreference = "Stop"
 
@@ -79,7 +79,7 @@ aws s3 sync dashboard/dist "s3://$BucketName" --region $Region --delete
 
 $WebsiteUrl = "http://$BucketName.s3-website.$Region.amazonaws.com"
 Write-Host "`n================================================" -ForegroundColor Cyan
-Write-Host "🎉 Dashboard Deployed Successfully!" -ForegroundColor Green
+Write-Host "Dashboard Deployed Successfully!" -ForegroundColor Green
 Write-Host "Live Website URL:" -ForegroundColor Yellow
-Write-Host "👉 $WebsiteUrl" -ForegroundColor Cyan
+Write-Host "  $WebsiteUrl" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan

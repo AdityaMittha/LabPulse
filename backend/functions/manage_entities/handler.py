@@ -1,8 +1,4 @@
-"""
-manage_entities/handler.py — Lambda: Admin CRUD for Machines, Students, Timetable.
-Only accessible to Cognito 'admin' group users.
-Walchand Institute of Technology, Solapur — LabPulse Backend
-"""
+"""Admin CRUD for machines, students, and timetable slots."""
 import json
 import os
 import time
@@ -19,6 +15,7 @@ dynamodb = boto3.resource("dynamodb")
 machines_table       = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
 students_table       = dynamodb.Table(f"{TABLE_PREFIX}-Users")
 timetable_table      = dynamodb.Table(f"{TABLE_PREFIX}-Timetable")
+labs_table           = dynamodb.Table(f"{TABLE_PREFIX}-Labs")
 sessions_table       = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
 app_usage_table      = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
 behavior_table       = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
@@ -151,11 +148,13 @@ def lambda_handler(event, context):
         return _handle_students(method, body, event)
     elif "/timetable" in path:
         return _handle_timetable(method, body, event)
+    elif "/labs" in path:
+        return _handle_labs(method, body, event)
     else:
         return _cors({"error": "Unknown entity"}, 404)
 
 
-# ── Machines ─────────────────────────────────────────────────────────────────
+# â”€â”€ Machines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _handle_machines(method, body, event):
     qs = event.get("queryStringParameters") or {}
@@ -187,7 +186,7 @@ def _handle_machines(method, body, event):
             "last_seen_at": None,
             "created_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         })
-        return _cors({"machine_id": machine_id, "api_key": raw_key, "message": "Save this API key — it won't be shown again."}, 201)
+        return _cors({"machine_id": machine_id, "api_key": raw_key, "message": "Save this API key â€” it won't be shown again."}, 201)
 
     if method == "DELETE":
         machine_id = qs.get("machine_id") or body.get("machine_id")
@@ -199,7 +198,7 @@ def _handle_machines(method, body, event):
     return _cors({"error": "Method not allowed"}, 405)
 
 
-# ── Students ──────────────────────────────────────────────────────────────────
+# â”€â”€ Students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _handle_students(method, body, event):
     qs = event.get("queryStringParameters") or {}
@@ -211,9 +210,13 @@ def _handle_students(method, body, event):
         student_id    = body.get("student_id")
         name          = body.get("name")
         college_login = body.get("college_login")
+        pnr_no        = body.get("pnr_no", "").strip()
+        password      = body.get("password", "").strip()
+
         if not all([student_id, name, college_login]):
             return _cors({"error": "student_id, name, college_login required"}, 400)
-        students_table.put_item(Item={
+
+        item = {
             "student_id":    student_id,
             "name":          name,
             "department":    body.get("department", ""),
@@ -221,7 +224,17 @@ def _handle_students(method, body, event):
             "college_login": college_login,
             "role":          "student",
             "created_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        })
+        }
+
+        # PNR number (unique enrollment ID printed on college ID card)
+        if pnr_no:
+            item["pnr_no"] = pnr_no
+
+        # Store SHA-256 password hash — NEVER the plaintext password
+        if password:
+            item["password_hash"] = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
+
+        students_table.put_item(Item=item)
         return _cors({"student_id": student_id, "status": "created"}, 201)
 
     if method == "DELETE":
@@ -234,7 +247,7 @@ def _handle_students(method, body, event):
     return _cors({"error": "Method not allowed"}, 405)
 
 
-# ── Timetable ─────────────────────────────────────────────────────────────────
+# ── Timetable ───────────────────────────────────────────────────────────────────
 
 def _handle_timetable(method, body, event):
     qs = event.get("queryStringParameters") or {}
@@ -267,6 +280,40 @@ def _handle_timetable(method, body, event):
     if method == "DELETE":
         slot_id = qs.get("slot_id") or body.get("slot_id")
         timetable_table.delete_item(Key={"slot_id": slot_id})
+        return _cors({"status": "deleted"})
+
+    return _cors({"error": "Method not allowed"}, 405)
+
+
+# ── Labs ───────────────────────────────────────────────────────────────────
+
+def _handle_labs(method, body, event):
+    qs = event.get("queryStringParameters") or {}
+    if method == "GET":
+        resp = labs_table.scan()
+        return _cors({"labs": resp.get("Items", [])})
+
+    if method == "POST":
+        lab_id = body.get("lab_id")
+        name   = body.get("name")
+        if not lab_id or not name:
+            return _cors({"error": "lab_id and name required"}, 400)
+        labs_table.put_item(Item={
+            "lab_id":     lab_id,
+            "name":       name,
+            "building":   body.get("building", ""),
+            "floor":      body.get("floor", ""),
+            "department": body.get("department", ""),
+            "capacity":   int(body.get("capacity", 30)),
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+        return _cors({"lab_id": lab_id, "status": "created"}, 201)
+
+    if method == "DELETE":
+        lab_id = qs.get("lab_id") or body.get("lab_id")
+        if not lab_id:
+            return _cors({"error": "lab_id required"}, 400)
+        labs_table.delete_item(Key={"lab_id": lab_id})
         return _cors({"status": "deleted"})
 
     return _cors({"error": "Method not allowed"}, 405)

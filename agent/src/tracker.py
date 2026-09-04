@@ -1,14 +1,7 @@
 """
-tracker.py — Activity tracking for the LabPulse Windows agent.
-Tracks foreground apps, keyboard/mouse COUNTS ONLY (no key values),
-idle time, and browser tab titles/URLs for supported browsers.
-Walchand Institute of Technology, Solapur
-
-Browser tracking:
-  - Window titles are captured for browser processes to extract page titles.
-  - URLs are extracted from the browser address bar via Windows UI Automation.
-  - Supported browsers: Chrome, Edge, Firefox, Opera, Brave.
-  - Per-site active duration is accumulated alongside page titles.
+Activity tracking module. Polls the foreground window, counts keyboard/mouse
+inputs (never stores key values), detects idle periods, and extracts browser
+tab titles + URLs via Win32 UI Automation.
 """
 import ctypes
 import ctypes.wintypes
@@ -23,7 +16,7 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
-# ─── Windows API helpers ────────────────────────────────────────────────────
+
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -39,7 +32,7 @@ BROWSER_EXECUTABLES = {
     "chromium.exe":     "Chromium",
 }
 
-# Browser title suffixes to strip when extracting page title
+# Suffixes we strip from window titles to get the actual page name
 _BROWSER_SUFFIXES = [
     " - Google Chrome", " — Mozilla Firefox", " - Mozilla Firefox",
     " - Microsoft Edge", " - Microsoft\u200b Edge",
@@ -49,12 +42,10 @@ _BROWSER_SUFFIXES = [
 
 
 def _get_foreground_hwnd() -> int:
-    """Return the HWND of the current foreground window."""
     return user32.GetForegroundWindow()
 
 
 def _get_foreground_app(hwnd: int = None) -> str:
-    """Return the executable name of the current foreground window's process."""
     try:
         if hwnd is None:
             hwnd = _get_foreground_hwnd()
@@ -69,7 +60,6 @@ def _get_foreground_app(hwnd: int = None) -> str:
 
 
 def _get_window_title(hwnd: int) -> str:
-    """Return the window title string for a given HWND."""
     try:
         length = user32.GetWindowTextLengthW(hwnd)
         if length == 0:
@@ -82,7 +72,6 @@ def _get_window_title(hwnd: int) -> str:
 
 
 def _extract_page_title(window_title: str) -> str:
-    """Strip browser suffix from window title to get the page title."""
     title = window_title
     for suffix in _BROWSER_SUFFIXES:
         if title.endswith(suffix):
@@ -168,8 +157,6 @@ def _get_idle_seconds() -> float:
     return millis / 1000.0
 
 
-# ─── ActivityTracker ────────────────────────────────────────────────────────
-
 class ActivityTracker:
     """
     Polls every second:
@@ -183,27 +170,23 @@ class ActivityTracker:
     def __init__(self, idle_threshold_seconds: int = 60):
         self.idle_threshold = idle_threshold_seconds
 
-        # Per-app accumulated seconds (reset each hour by summarizer)
         self._app_seconds: dict[str, float] = defaultdict(float)
         self._app_opens: dict[str, int] = defaultdict(int)
         self._last_app: str = ""
 
-        # Input counters (counts only — no key values ever)
         self._keyboard_count: int = 0
         self._mouse_click_count: int = 0
         self._mouse_move_count: int = 0
 
-        # Time accumulators
         self._active_seconds: float = 0.0
         self._idle_seconds: float = 0.0
 
-        # Browser tracking
-        self._browser_tab_seconds: dict[str, float] = defaultdict(float)  # domain → seconds
-        self._browser_tab_visits: dict[str, int] = defaultdict(int)       # domain → visit count
-        self._browser_page_log: list[dict] = []  # [{title, url, domain, browser, timestamp}]
+        self._browser_tab_seconds: dict[str, float] = defaultdict(float)
+        self._browser_tab_visits: dict[str, int] = defaultdict(int)
+        self._browser_page_log: list[dict] = []
         self._last_browser_domain: str = ""
         self._last_browser_title: str = ""
-        self._browser_history_limit: int = 500  # cap log entries per hour
+        self._browser_history_limit: int = 500
 
         self._lock = threading.Lock()
         self._running = False
@@ -211,15 +194,13 @@ class ActivityTracker:
         self._pynput_keyboard = None
         self._pynput_mouse = None
 
-    # ── pynput listeners ────────────────────────────────────────────────────
-
     def _start_pynput(self):
         try:
             from pynput import keyboard as kb, mouse as ms
 
             def on_press(_key):
                 with self._lock:
-                    self._keyboard_count += 1  # count only — key value DISCARDED
+                    self._keyboard_count += 1
 
             def on_click(_x, _y, _button, pressed):
                 if pressed:
@@ -246,10 +227,7 @@ class ActivityTracker:
                 except Exception:
                     pass
 
-    # ── Browser tracking helpers ────────────────────────────────────────────
-
     def _track_browser(self, hwnd: int, app_name: str, is_active: bool):
-        """Extract and record browser tab title, URL, and domain."""
         app_lower = app_name.lower()
         if app_lower not in BROWSER_EXECUTABLES:
             # Not a browser — reset last browser state
@@ -294,7 +272,7 @@ class ActivityTracker:
                 self._last_browser_domain = domain
                 self._last_browser_title = page_title
 
-    # ── Poll loop ───────────────────────────────────────────────────────────
+
 
     def _poll(self):
         while self._running:
@@ -324,7 +302,7 @@ class ActivityTracker:
 
             time.sleep(1.0)
 
-    # ── Public API ──────────────────────────────────────────────────────────
+
 
     def start(self):
         if self._running:

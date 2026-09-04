@@ -1,40 +1,47 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardCheck, Search } from "lucide-react";
-import { labs, todayStr } from "../data/mockData";
+import { todayStr } from "../data/mockData";
 import { ComplianceBadge, SectionHeading, PageWrapper, StatCard } from "../components/Shared";
-import { fetchTimetable, fetchUsage, fetchStudents } from "../api/apiClient";
-
+import { fetchTimetable, fetchUsage, fetchStudents, fetchLabs } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
 
 export default function CompliancePage({ globalDate }) {
   const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
 
-  const visibleLabs = useMemo(() => {
-    if (isAdmin) return labs;
-    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
-  }, [isAdmin, user]);
-
-  const [selectedLab,  setSelectedLab]  = useState(visibleLabs[0]?.lab_id || labs[0].lab_id);
+  const [labsData,     setLabsData]     = useState([]);
+  const [selectedLab,  setSelectedLab]  = useState("");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [search,       setSearch]       = useState("");
 
   const [timetableData, setTimetableData] = useState([]);
-  const [sessionsData, setSessionsData] = useState([]);
-  const [studentsData, setStudentsData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [sessionsData,  setSessionsData]  = useState([]);
+  const [studentsData,  setStudentsData]  = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(null);
 
   useEffect(() => {
-    if (globalDate) {
-      setSelectedDate(globalDate);
-    }
+    if (globalDate) setSelectedDate(globalDate);
   }, [globalDate]);
 
+  // Load labs on mount
   useEffect(() => {
+    fetchLabs().then(labsList => {
+      const visible = isAdmin
+        ? labsList
+        : labsList.filter(l => l.department?.includes(user.department) || user.department?.includes(l.department));
+      setLabsData(visible);
+      if (visible.length > 0) setSelectedLab(visible[0].lab_id);
+    }).catch(err => setError(err.message));
+  }, [isAdmin, user]);
+
+  useEffect(() => {
+    if (!selectedLab) return;
     let active = true;
     setLoading(true);
+    setError(null);
 
     Promise.all([
       fetchTimetable(selectedLab),
@@ -42,14 +49,14 @@ export default function CompliancePage({ globalDate }) {
       fetchStudents()
     ]).then(([tt, sess, studs]) => {
       if (active) {
-        setTimetableData(tt || []);
-        setSessionsData(sess || []);
+        setTimetableData(tt   || []);
+        setSessionsData(sess  || []);
         setStudentsData(studs || []);
         setLoading(false);
       }
     }).catch(err => {
       console.error(err);
-      if (active) setLoading(false);
+      if (active) { setError(err.message); setLoading(false); }
     });
 
     return () => { active = false; };
@@ -111,6 +118,19 @@ export default function CompliancePage({ globalDate }) {
     );
   }
 
+  if (error && labsData.length === 0) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load compliance data</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper>
       {/* Header */}
@@ -127,7 +147,7 @@ export default function CompliancePage({ globalDate }) {
           <div>
             <label className="form-label">Lab</label>
             <select className="form-select" value={selectedLab} onChange={e => { setSelectedLab(e.target.value); setSelectedSlot(""); }}>
-              {visibleLabs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
+              {labsData.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
             </select>
           </div>
           <div>

@@ -1,8 +1,6 @@
 """
-live_tracker_demo.py — Live demo: shows which apps/tasks the agent detects on YOUR machine.
-Runs the ActivityTracker for ~10 seconds and prints what it captures.
-
-Usage:  python live_tracker_demo.py
+Quick demo — runs the tracker for 10 seconds and prints what it captured.
+Usage: python live_tracker_demo.py
 """
 import os
 import sys

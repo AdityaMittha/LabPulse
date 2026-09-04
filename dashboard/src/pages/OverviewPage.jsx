@@ -5,42 +5,46 @@ import {
 import {
   Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu, Globe
 } from "lucide-react";
-import {
-  labs, getComplianceStats, todayStr, formatDuration, getTopSites
-} from "../data/mockData";
+import { todayStr, formatDuration } from "../data/mockData";
 import {
   StatCard, ComplianceBadge, SectionHeading, PageWrapper
 } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchUsage, fetchMachines, fetchTopSites } from "../api/apiClient";
+import { fetchUsage, fetchMachines, fetchTopSites, fetchLabs } from "../api/apiClient";
 
 export default function OverviewPage({ globalDate }) {
   const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
+
+  const [labsData,     setLabsData]     = useState([]);
   const [sessionsData, setSessionsData] = useState([]);
   const [machinesData, setMachinesData] = useState([]);
   const [topSitesData, setTopSitesData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    
+    setError(null);
+
     Promise.all([
+      fetchLabs(),
       fetchUsage({ date: today }),
       fetchMachines(),
-      fetchTopSites("", today)
-    ]).then(([sess, machs, sites]) => {
+      fetchTopSites("", today),
+    ]).then(([labs, sess, machs, sites]) => {
       if (active) {
-        setSessionsData(sess || []);
+        setLabsData(labs  || []);
+        setSessionsData(sess  || []);
         setMachinesData(machs || []);
         setTopSitesData(sites || []);
         setLoading(false);
       }
     }).catch(err => {
-      console.error(err);
-      if (active) setLoading(false);
+      console.error("OverviewPage fetch error:", err);
+      if (active) { setError(err.message); setLoading(false); }
     });
 
     return () => { active = false; };
@@ -48,23 +52,27 @@ export default function OverviewPage({ globalDate }) {
 
   // Filter labs by department if not admin
   const visibleLabs = useMemo(() => {
-    if (isAdmin) return labs;
-    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
-  }, [isAdmin, user]);
+    if (isAdmin) return labsData;
+    return labsData.filter(l =>
+      l.department?.includes(user.department) || user.department?.includes(l.department)
+    );
+  }, [isAdmin, user, labsData]);
 
   const visibleLabIds = useMemo(() => visibleLabs.map(l => l.lab_id), [visibleLabs]);
 
   // Filter sessions and machines by visible labs
-  const todaySessions = useMemo(() => {
-    return sessionsData.filter(s => visibleLabIds.includes(s.lab_id));
-  }, [sessionsData, visibleLabIds]);
+  const todaySessions = useMemo(
+    () => sessionsData.filter(s => visibleLabIds.includes(s.lab_id)),
+    [sessionsData, visibleLabIds]
+  );
 
-  const visibleMachines = useMemo(() => {
-    return machinesData.filter(m => visibleLabIds.includes(m.lab_id));
-  }, [machinesData, visibleLabIds]);
+  const visibleMachines = useMemo(
+    () => machinesData.filter(m => visibleLabIds.includes(m.lab_id)),
+    [machinesData, visibleLabIds]
+  );
 
   const activeMachines = visibleMachines.filter(m => m.status === "active").length;
-  const onlineNow      = Math.min(activeMachines, Math.max(1, Math.floor(activeMachines * 0.6)));
+  const onlineNow      = Math.min(activeMachines, Math.max(0, Math.floor(activeMachines * 0.6)));
 
   const complianceAll = useMemo(() => {
     const c = todaySessions.filter(s => s.compliance_status === "compliant").length;
@@ -77,7 +85,7 @@ export default function OverviewPage({ globalDate }) {
       const hour = i + 9;
       const count = todaySessions.filter(s => {
         const d = new Date(s.login_time);
-        return d.getHours() === hour || d.getUTCHours() + 5.5 === hour; // handle both UTC and local timezone
+        return d.getHours() === hour;
       }).length;
       return { hour: `${hour}:00`, sessions: count };
     });
@@ -89,14 +97,22 @@ export default function OverviewPage({ globalDate }) {
     [todaySessions]
   );
 
-  // Lab utilization cards
+  // Lab utilization cards derived from fetched data
   const labStats = useMemo(() => visibleLabs.map(lab => {
     const labSessions = todaySessions.filter(s => s.lab_id === lab.lab_id);
     const labMachines = visibleMachines.filter(m => m.lab_id === lab.lab_id && m.status === "active").length;
     const util = labMachines > 0 ? Math.min(100, Math.round((labSessions.length / (labMachines * 8)) * 100)) : 0;
-    const compliance = getComplianceStats(lab.lab_id, today);
-    return { ...lab, util, sessionCount: labSessions.length, machineCount: labMachines, compliance };
-  }), [visibleLabs, todaySessions, visibleMachines, today]);
+    const compliant     = labSessions.filter(s => s.compliance_status === "compliant").length;
+    const partial       = labSessions.filter(s => s.compliance_status === "partial").length;
+    const non_compliant = labSessions.filter(s => s.compliance_status === "non_compliant").length;
+    return {
+      ...lab,
+      util,
+      sessionCount: labSessions.length,
+      machineCount: labMachines,
+      compliance: { compliant, partial, non_compliant, total: labSessions.length },
+    };
+  }), [visibleLabs, todaySessions, visibleMachines]);
 
   if (loading) {
     return (
@@ -105,6 +121,19 @@ export default function OverviewPage({ globalDate }) {
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
             <span className="text-sm text-slate-400">Loading lab utilization stats…</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load data</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
           </div>
         </div>
       </PageWrapper>
@@ -123,10 +152,10 @@ export default function OverviewPage({ globalDate }) {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Sessions Today"   value={todaySessions.length}                  icon={Activity}    color="blue"   trend={12} />
-        <StatCard label="Machines Online"  value={`${onlineNow}/${activeMachines}`}      icon={Cpu}         color="green"  trend={3}  />
-        <StatCard label="Compliance Rate"  value={`${complianceAll}%`}                   icon={CheckCircle2} color="purple" trend={-2} />
-        <StatCard label="Active Students"  value={new Set(todaySessions.map(s=>s.student_id)).size} icon={Users} color="amber" trend={8} />
+        <StatCard label="Sessions Today"   value={todaySessions.length}                              icon={Activity}    color="blue"   />
+        <StatCard label="Machines Online"  value={`${onlineNow}/${activeMachines}`}                  icon={Cpu}         color="green"  />
+        <StatCard label="Compliance Rate"  value={`${complianceAll}%`}                               icon={CheckCircle2} color="purple" />
+        <StatCard label="Active Students"  value={new Set(todaySessions.map(s => s.student_id)).size} icon={Users}       color="amber"  />
       </div>
 
       {/* Hourly bar chart */}
@@ -179,31 +208,33 @@ export default function OverviewPage({ globalDate }) {
             action={<Link to="/labs" className="text-xs text-primary-600 hover:underline font-medium">View all →</Link>}
           />
           <div className="space-y-3">
-            {labStats.map(lab => (
-              <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
-                className="card card-body flex items-center gap-4 hover:bg-slate-50/50 transition-all group">
-                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                  <FlaskConical size={16} className="text-slate-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-sm text-slate-800 group-hover:text-primary-600 transition-colors">{lab.name}</p>
-                    <span className="text-xs font-semibold text-slate-600">{lab.util}%</span>
+            {labStats.length === 0
+              ? <p className="text-sm text-slate-400 py-6 text-center">No labs found.</p>
+              : labStats.map(lab => (
+                <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
+                  className="card card-body flex items-center gap-4 hover:bg-slate-50/50 transition-all group">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                    <FlaskConical size={16} className="text-slate-500" />
                   </div>
-                  <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${lab.util >= 70 ? "bg-primary-600" : lab.util >= 40 ? "bg-amber-400" : "bg-slate-300"}`}
-                      style={{ width: `${lab.util}%` }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-medium text-sm text-slate-800 group-hover:text-primary-600 transition-colors">{lab.name}</p>
+                      <span className="text-xs font-semibold text-slate-600">{lab.util}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${lab.util >= 70 ? "bg-primary-600" : lab.util >= 40 ? "bg-amber-400" : "bg-slate-300"}`}
+                        style={{ width: `${lab.util}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                      <span>{lab.sessionCount} sessions</span>
+                      <span>·</span>
+                      <span>{lab.machineCount} machines</span>
+                      <span>·</span>
+                      <span className="text-emerald-600">{lab.compliance.compliant} compliant</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
-                    <span>{lab.sessionCount} sessions</span>
-                    <span>·</span>
-                    <span>{lab.machineCount} machines</span>
-                    <span>·</span>
-                    <span className="text-emerald-600">{lab.compliance.compliant} compliant</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))}
           </div>
         </div>
 

@@ -1,46 +1,52 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, Copy, Check, ChevronDown, ChevronRight, Monitor, Wifi, WifiOff, Server } from "lucide-react";
-import { labs, machines as allMachines } from "../data/mockData";
 import { MachineStatusBadge, PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { deleteMachine } from "../api/apiClient";
+import { fetchMachines, fetchLabs, addMachine, deleteMachine } from "../api/apiClient";
 
-const STATUSES = ["active", "inactive"];
+const STATUSES     = ["active", "inactive"];
 const STATUS_LABELS = { active: "Active Machines", inactive: "Inactive Machines" };
-
-const LAB_COLORS = {
-  "CS-LAB-1": { bg: "bg-slate-50",    border: "border-slate-200",    accent: "bg-slate-600",    text: "text-slate-700",    ring: "ring-slate-300" },
-  "CS-LAB-2": { bg: "bg-slate-50",    border: "border-slate-200",    accent: "bg-slate-500",    text: "text-slate-700",    ring: "ring-slate-300" },
-  "IT-LAB":   { bg: "bg-slate-50",    border: "border-slate-200",    accent: "bg-primary-600",  text: "text-primary-700",  ring: "ring-primary-200" },
-  "ETC-LAB":  { bg: "bg-slate-50",    border: "border-slate-200",    accent: "bg-amber-600",    text: "text-amber-700",    ring: "ring-amber-200" },
-};
 
 const STATUS_COLORS = {
   active:   "bg-emerald-50 text-emerald-700",
   inactive: "bg-red-50 text-red-600",
 };
 
-function generateApiKey() {
-  return "lp_" + Array.from({ length: 32 }, () =>
-    "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]
-  ).join("");
-}
-
 export default function AdminMachinesPage() {
-  const [machines, setMachines] = useState(allMachines);
-  const [search, setSearch] = useState("");
-  const [labFilter, setLabFilter] = useState("ALL");
+  const [labs,         setLabs]         = useState([]);
+  const [machines,     setMachines]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [search,       setSearch]       = useState("");
+  const [labFilter,    setLabFilter]    = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newKey, setNewKey] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [form, setForm] = useState({ machine_id: "", lab_id: labs[0].lab_id, hostname: "", status: "active" });
+  const [newKey,       setNewKey]       = useState("");
+  const [copied,       setCopied]       = useState(false);
+  const [submitting,   setSubmitting]   = useState(false);
+  const [form, setForm] = useState({ machine_id: "", lab_id: "", hostname: "" });
 
-  // Track expanded labs and statuses
-  const [expandedLabs, setExpandedLabs] = useState(() => new Set(labs.map(l => l.lab_id)));
+  const [expandedLabs,     setExpandedLabs]     = useState(() => new Set());
   const [expandedStatuses, setExpandedStatuses] = useState(() => new Set());
 
-  const toggleLab = (labId) => {
+  // Load labs and machines from API
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    Promise.all([fetchLabs(), fetchMachines()])
+      .then(([labsList, machList]) => {
+        setLabs(labsList);
+        setMachines(machList);
+        if (labsList.length > 0) {
+          setExpandedLabs(new Set(labsList.map(l => l.lab_id)));
+          setForm(f => ({ ...f, lab_id: labsList[0].lab_id }));
+        }
+        setLoading(false);
+      })
+      .catch(err => { setError(err.message); setLoading(false); });
+  }, []);
+
+  const toggleLab = labId => {
     setExpandedLabs(prev => {
       const next = new Set(prev);
       next.has(labId) ? next.delete(labId) : next.add(labId);
@@ -48,7 +54,7 @@ export default function AdminMachinesPage() {
     });
   };
 
-  const toggleStatus = (key) => {
+  const toggleStatus = key => {
     setExpandedStatuses(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
@@ -56,15 +62,13 @@ export default function AdminMachinesPage() {
     });
   };
 
-  // Filter machines
   const filtered = useMemo(() => machines.filter(m =>
     (labFilter === "ALL" || m.lab_id === labFilter) &&
     (statusFilter === "ALL" || m.status === statusFilter) &&
     (m.machine_id.toLowerCase().includes(search.toLowerCase()) ||
-     m.hostname.toLowerCase().includes(search.toLowerCase()))
+     (m.hostname || "").toLowerCase().includes(search.toLowerCase()))
   ), [machines, labFilter, statusFilter, search]);
 
-  // Group by lab -> status
   const grouped = useMemo(() => {
     const map = {};
     labs.forEach(l => {
@@ -77,47 +81,54 @@ export default function AdminMachinesPage() {
       }
     });
     return map;
-  }, [filtered]);
+  }, [filtered, labs]);
 
-  // Lab counts
   const labCounts = useMemo(() => {
     const counts = {};
     labs.forEach(l => {
       const labMachines = machines.filter(m => m.lab_id === l.lab_id);
       counts[l.lab_id] = {
-        total: labMachines.length,
-        active: labMachines.filter(m => m.status === "active").length,
+        total:    labMachines.length,
+        active:   labMachines.filter(m => m.status === "active").length,
         inactive: labMachines.filter(m => m.status === "inactive").length,
       };
     });
     return counts;
-  }, [machines]);
+  }, [machines, labs]);
 
-  const handleAdd = () => {
-    const key = generateApiKey();
-    const newMachine = {
-      ...form,
-      last_seen_at: null,
-      ip_address: "—",
-      api_key_hash: "sha256:" + key.slice(3, 11) + "...",
-    };
-    setMachines(prev => [...prev, newMachine]);
-    setNewKey(key);
-    setShowAddModal(false);
+  const handleAdd = async () => {
+    if (!form.machine_id || !form.hostname || !form.lab_id) return;
+    setSubmitting(true);
+    try {
+      const result = await addMachine(form);
+      // Backend returns { machine_id, api_key, message }
+      const newMachine = {
+        machine_id:   form.machine_id,
+        lab_id:       form.lab_id,
+        hostname:     form.hostname,
+        status:       "active",
+        last_seen_at: null,
+        ip_address:   "—",
+      };
+      setMachines(prev => [...prev, newMachine]);
+      setNewKey(result.api_key || "");
+      setShowAddModal(false);
+      setForm(f => ({ ...f, machine_id: "", hostname: "" }));
+    } catch (err) {
+      alert("Failed to add machine: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async id => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete machine "${id}"?\n\nThis will permanently delete this machine record and ALL of its associated sessions, app usages, and behavior metrics.`
-    );
-    if (confirmDelete) {
-      try {
-        await deleteMachine(id);
-        setMachines(prev => prev.filter(m => m.machine_id !== id));
-        alert("Machine and all associated data successfully deleted.");
-      } catch (err) {
-        alert("Failed to delete machine: " + err.message);
-      }
+    if (!window.confirm(`Are you sure you want to delete machine "${id}"?\n\nThis will permanently delete this machine record and ALL of its associated sessions, app usages, and behavior metrics.`)) return;
+    try {
+      await deleteMachine(id);
+      setMachines(prev => prev.filter(m => m.machine_id !== id));
+      alert("Machine and all associated data successfully deleted.");
+    } catch (err) {
+      alert("Failed to delete machine: " + err.message);
     }
   };
 
@@ -127,11 +138,47 @@ export default function AdminMachinesPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const visibleLabs = labFilter === "ALL" ? labs : labs.filter(l => l.lab_id === labFilter);
+  const visibleLabs    = labFilter === "ALL" ? labs : labs.filter(l => l.lab_id === labFilter);
   const visibleStatuses = statusFilter === "ALL" ? STATUSES : [statusFilter];
+  const totalActive    = machines.filter(m => m.status === "active").length;
+  const totalInactive  = machines.filter(m => m.status === "inactive").length;
 
-  const totalActive = machines.filter(m => m.status === "active").length;
-  const totalInactive = machines.filter(m => m.status === "inactive").length;
+  // Generate a color class for a lab given its index
+  const getLabColor = idx => {
+    const colors = [
+      { accent: "bg-slate-600",   ring: "ring-slate-300" },
+      { accent: "bg-slate-500",   ring: "ring-slate-300" },
+      { accent: "bg-primary-600", ring: "ring-primary-200" },
+      { accent: "bg-amber-600",   ring: "ring-amber-200" },
+    ];
+    return colors[idx % colors.length];
+  };
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading machines…</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load machines</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
@@ -161,9 +208,9 @@ export default function AdminMachinesPage() {
 
       {/* Lab stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {labs.map(l => {
-          const c = LAB_COLORS[l.lab_id] || LAB_COLORS["CS-LAB-1"];
-          const counts = labCounts[l.lab_id];
+        {labs.map((l, idx) => {
+          const c      = getLabColor(idx);
+          const counts = labCounts[l.lab_id] || { total: 0, active: 0, inactive: 0 };
           return (
             <button key={l.lab_id} onClick={() => setLabFilter(prev => prev === l.lab_id ? "ALL" : l.lab_id)}
               className={`stat-card text-left transition-all ${labFilter === l.lab_id ? `ring-2 ${c.ring}` : "hover:bg-slate-50/50"}`}>
@@ -214,18 +261,17 @@ export default function AdminMachinesPage() {
 
       {/* Lab accordion cards */}
       <div className="space-y-4">
-        {visibleLabs.map(lab => {
-          const c = LAB_COLORS[lab.lab_id] || LAB_COLORS["CS-LAB-1"];
-          const labMachines = filtered.filter(m => m.lab_id === lab.lab_id);
-          const isLabOpen = expandedLabs.has(lab.lab_id);
-          const activeCount = labMachines.filter(m => m.status === "active").length;
+        {visibleLabs.map((lab, idx) => {
+          const c            = getLabColor(idx);
+          const labMachines  = filtered.filter(m => m.lab_id === lab.lab_id);
+          const isLabOpen    = expandedLabs.has(lab.lab_id);
+          const activeCount  = labMachines.filter(m => m.status === "active").length;
           const inactiveCount = labMachines.filter(m => m.status === "inactive").length;
 
           if (labMachines.length === 0 && search) return null;
 
           return (
             <div key={lab.lab_id} className="card overflow-hidden transition-all">
-              {/* Lab header */}
               <button
                 className="w-full flex items-center gap-3 px-5 py-4 bg-slate-50 hover:bg-slate-100/50 transition-all"
                 onClick={() => toggleLab(lab.lab_id)}
@@ -237,7 +283,6 @@ export default function AdminMachinesPage() {
                   <h2 className="font-semibold text-sm text-slate-700">{lab.name}</h2>
                   <p className="text-xs text-slate-400 mt-0.5">{lab.building} · {lab.floor} Floor · {labMachines.length} machines</p>
                 </div>
-                {/* Status breakdown badges */}
                 <div className="hidden sm:flex items-center gap-1.5 mr-2">
                   {activeCount > 0 && (
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS.active}`}>
@@ -253,19 +298,17 @@ export default function AdminMachinesPage() {
                 {isLabOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
               </button>
 
-              {/* Status subcategories */}
               {isLabOpen && (
                 <div className="divide-y divide-slate-100/60">
                   {visibleStatuses.map(status => {
                     const statusMachines = grouped[lab.lab_id]?.[status] || [];
-                    const statusKey = `${lab.lab_id}-${status}`;
-                    const isStatusOpen = expandedStatuses.has(statusKey);
+                    const statusKey      = `${lab.lab_id}-${status}`;
+                    const isStatusOpen   = expandedStatuses.has(statusKey);
 
                     if (statusMachines.length === 0) return null;
 
                     return (
                       <div key={statusKey}>
-                        {/* Status subheader */}
                         <button
                           className="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50/50 transition-colors"
                           onClick={() => toggleStatus(statusKey)}
@@ -282,7 +325,6 @@ export default function AdminMachinesPage() {
                           <span className="text-xs text-slate-400 ml-auto">{statusMachines.length} machines</span>
                         </button>
 
-                        {/* Machine rows */}
                         {isStatusOpen && (
                           <div className="bg-white">
                             <table className="table">
@@ -333,7 +375,6 @@ export default function AdminMachinesPage() {
                     );
                   })}
 
-                  {/* Empty state */}
                   {visibleStatuses.every(s => (grouped[lab.lab_id]?.[s] || []).length === 0) && (
                     <p className="text-center text-slate-400 py-6 text-sm">No machines match your filters in {lab.name}.</p>
                   )}
@@ -344,7 +385,6 @@ export default function AdminMachinesPage() {
         })}
       </div>
 
-      {/* No results */}
       {filtered.length === 0 && (
         <div className="card card-body text-center py-12 mt-4">
           <p className="text-slate-400 text-sm">No machines match your search or filters.</p>
@@ -376,9 +416,9 @@ export default function AdminMachinesPage() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button className="btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.machine_id || !form.hostname}>
-                Register & Generate Key
+              <button className="btn-secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</button>
+              <button className="btn-primary" onClick={handleAdd} disabled={!form.machine_id || !form.hostname || submitting}>
+                {submitting ? "Registering…" : "Register & Generate Key"}
               </button>
             </div>
           </div>

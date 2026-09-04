@@ -1,9 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, Users, GraduationCap } from "lucide-react";
-import { students as allStudents } from "../data/mockData";
-import { PageWrapper, StatCard } from "../components/Shared";
+import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { deleteStudent } from "../api/apiClient";
+import { fetchStudents, deleteStudent, addStudent } from "../api/apiClient";
 
 const DEPTS = ["CSE", "IT", "E&TC"];
 const YEARS = ["FE", "SE", "TE", "BE"];
@@ -23,18 +22,29 @@ const YEAR_COLORS = {
 };
 
 export default function AdminStudentsPage() {
-  const [students, setStudents] = useState(allStudents);
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState("ALL");
-  const [yearFilter, setYearFilter] = useState("ALL");
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", student_id: "", department: "CSE", year: "BE", college_login: "" });
+  const [students,    setStudents]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [search,      setSearch]      = useState("");
+  const [deptFilter,  setDeptFilter]  = useState("ALL");
+  const [yearFilter,  setYearFilter]  = useState("ALL");
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [form, setForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
 
-  // Track which departments and years are expanded
   const [expandedDepts, setExpandedDepts] = useState(() => new Set(DEPTS));
   const [expandedYears, setExpandedYears] = useState(() => new Set());
 
-  const toggleDept = (dept) => {
+  // Load students from API
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetchStudents()
+      .then(data => { setStudents(data); setLoading(false); })
+      .catch(err  => { setError(err.message); setLoading(false); });
+  }, []);
+
+  const toggleDept = dept => {
     setExpandedDepts(prev => {
       const next = new Set(prev);
       next.has(dept) ? next.delete(dept) : next.add(dept);
@@ -42,7 +52,7 @@ export default function AdminStudentsPage() {
     });
   };
 
-  const toggleYear = (key) => {
+  const toggleYear = key => {
     setExpandedYears(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
@@ -50,14 +60,14 @@ export default function AdminStudentsPage() {
     });
   };
 
-  // Filter students by search
   const filtered = useMemo(() => students.filter(s =>
     (deptFilter === "ALL" || s.department === deptFilter) &&
     (yearFilter === "ALL" || s.year === yearFilter) &&
-    (s.name.toLowerCase().includes(search.toLowerCase()) || s.student_id.toLowerCase().includes(search.toLowerCase()))
+    (s.name.toLowerCase().includes(search.toLowerCase()) ||
+     s.student_id.toLowerCase().includes(search.toLowerCase()) ||
+     (s.pnr_no && s.pnr_no.toLowerCase().includes(search.toLowerCase())))
   ), [students, deptFilter, yearFilter, search]);
 
-  // Group by department -> year
   const grouped = useMemo(() => {
     const map = {};
     DEPTS.forEach(d => {
@@ -72,37 +82,67 @@ export default function AdminStudentsPage() {
     return map;
   }, [filtered]);
 
-  // Dept counts (from all students, not filtered)
   const deptCounts = useMemo(() => {
     const counts = {};
     DEPTS.forEach(d => { counts[d] = students.filter(s => s.department === d).length; });
     return counts;
   }, [students]);
 
-  const handleAdd = () => {
-    setStudents(prev => [...prev, { ...form, role: "student" }]);
-    setShowAdd(false);
-    setForm({ name: "", student_id: "", department: "CSE", year: "BE", college_login: "" });
+  const handleAdd = async () => {
+    if (!form.name || !form.student_id) return;
+    setSubmitting(true);
+    try {
+      await addStudent({ ...form });
+      setStudents(prev => [...prev, { ...form, role: "student" }]);
+      setShowAdd(false);
+      setForm({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
+    } catch (err) {
+      alert("Failed to add student: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = async (studentId) => {
+  const handleDelete = async studentId => {
     const studentName = students.find(s => s.student_id === studentId)?.name || studentId;
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete student "${studentName}"?\n\nThis will permanently delete this student record and ALL of their associated sessions, app usages, and behavior metrics.`
-    );
-    if (confirmDelete) {
-      try {
-        await deleteStudent(studentId);
-        setStudents(prev => prev.filter(x => x.student_id !== studentId));
-        alert("Student and all associated data successfully deleted.");
-      } catch (err) {
-        alert("Failed to delete student: " + err.message);
-      }
+    if (!window.confirm(`Are you sure you want to delete student "${studentName}"?\n\nThis will permanently delete this student record and ALL of their associated sessions, app usages, and behavior metrics.`)) return;
+    try {
+      await deleteStudent(studentId);
+      setStudents(prev => prev.filter(x => x.student_id !== studentId));
+      alert("Student and all associated data successfully deleted.");
+    } catch (err) {
+      alert("Failed to delete student: " + err.message);
     }
   };
 
   const visibleDepts = deptFilter === "ALL" ? DEPTS : [deptFilter];
   const visibleYears = yearFilter === "ALL" ? YEARS : [yearFilter];
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading students…</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load students</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
@@ -120,7 +160,7 @@ export default function AdminStudentsPage() {
       {/* Department stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {DEPTS.map(d => {
-          const c = DEPT_COLORS[d];
+          const c     = DEPT_COLORS[d];
           const count = deptCounts[d];
           return (
             <button key={d} onClick={() => setDeptFilter(prev => prev === d ? "ALL" : d)}
@@ -165,9 +205,9 @@ export default function AdminStudentsPage() {
       {/* Department accordion cards */}
       <div className="space-y-4">
         {visibleDepts.map(dept => {
-          const c = DEPT_COLORS[dept];
+          const c            = DEPT_COLORS[dept];
           const deptStudents = filtered.filter(s => s.department === dept);
-          const isDeptOpen = expandedDepts.has(dept);
+          const isDeptOpen   = expandedDepts.has(dept);
 
           if (deptStudents.length === 0 && search) return null;
 
@@ -185,7 +225,6 @@ export default function AdminStudentsPage() {
                   <h2 className="font-semibold text-sm text-slate-700">{dept} Department</h2>
                   <p className="text-xs text-slate-400 mt-0.5">{deptStudents.length} students</p>
                 </div>
-                {/* Year breakdown badges */}
                 <div className="hidden sm:flex items-center gap-1.5 mr-2">
                   {visibleYears.map(y => {
                     const count = grouped[dept]?.[y]?.length || 0;
@@ -200,19 +239,17 @@ export default function AdminStudentsPage() {
                 {isDeptOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
               </button>
 
-              {/* Year subcategories */}
               {isDeptOpen && (
                 <div className="divide-y divide-slate-100/60">
                   {visibleYears.map(year => {
                     const yearStudents = grouped[dept]?.[year] || [];
-                    const yearKey = `${dept}-${year}`;
-                    const isYearOpen = expandedYears.has(yearKey);
+                    const yearKey      = `${dept}-${year}`;
+                    const isYearOpen   = expandedYears.has(yearKey);
 
                     if (yearStudents.length === 0) return null;
 
                     return (
                       <div key={yearKey}>
-                        {/* Year subheader */}
                         <button
                           className="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50/50 transition-colors"
                           onClick={() => toggleYear(yearKey)}
@@ -221,14 +258,11 @@ export default function AdminStudentsPage() {
                             ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
                             : <ChevronRight size={14} className="text-slate-400 shrink-0" />
                           }
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${YEAR_COLORS[year]}`}>
-                            {year}
-                          </span>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${YEAR_COLORS[year]}`}>{year}</span>
                           <span className="text-sm font-medium text-slate-600">{YEAR_LABELS[year]}</span>
                           <span className="text-xs text-slate-400 ml-auto">{yearStudents.length} students</span>
                         </button>
 
-                        {/* Student rows */}
                         {isYearOpen && (
                           <div className="bg-white">
                             <table className="table">
@@ -236,6 +270,7 @@ export default function AdminStudentsPage() {
                                 <tr>
                                   <th className="!text-[10px] !py-2">Name</th>
                                   <th className="!text-[10px] !py-2">Student ID</th>
+                                  <th className="!text-[10px] !py-2">PNR No.</th>
                                   <th className="!text-[10px] !py-2">Email</th>
                                   <th className="!text-[10px] !py-2 text-right">Actions</th>
                                 </tr>
@@ -249,6 +284,7 @@ export default function AdminStudentsPage() {
                                       </Link>
                                     </td>
                                     <td className="font-mono text-xs text-slate-500">{s.student_id}</td>
+                                    <td className="font-mono text-xs font-semibold text-slate-700">{s.pnr_no || "—"}</td>
                                     <td className="text-xs text-slate-400">{s.college_login}</td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
@@ -271,7 +307,6 @@ export default function AdminStudentsPage() {
                     );
                   })}
 
-                  {/* Empty state for this department */}
                   {visibleYears.every(y => (grouped[dept]?.[y] || []).length === 0) && (
                     <p className="text-center text-slate-400 py-6 text-sm">No students match your filters in {dept}.</p>
                   )}
@@ -282,7 +317,6 @@ export default function AdminStudentsPage() {
         })}
       </div>
 
-      {/* No results */}
       {filtered.length === 0 && (
         <div className="card card-body text-center py-12 mt-4">
           <p className="text-slate-400 text-sm">No students match your search or filters.</p>
@@ -298,7 +332,9 @@ export default function AdminStudentsPage() {
               {[
                 ["Name", "name", "text", "Full name"],
                 ["Student ID", "student_id", "text", "e.g. CS2024001"],
-                ["Email", "college_login", "email", "name@wit.ac.in"],
+                ["PNR No.", "pnr_no", "text", "e.g. 2024WIT001 (used for PC login)"],
+                ["Password", "password", "password", "Password for PC login (optional)"],
+                ["Email", "college_login", "email", "name@college.ac.in"],
               ].map(([label, key, type, placeholder]) => (
                 <div key={key}>
                   <label className="form-label">{label}</label>
@@ -322,8 +358,10 @@ export default function AdminStudentsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5">
-              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.name || !form.student_id}>Add Student</button>
+              <button className="btn-secondary" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</button>
+              <button className="btn-primary" onClick={handleAdd} disabled={!form.name || !form.student_id || submitting}>
+                {submitting ? "Adding…" : "Add Student"}
+              </button>
             </div>
           </div>
         </div>

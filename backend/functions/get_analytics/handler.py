@@ -1,9 +1,8 @@
 """
-get_analytics/handler.py — Lambda: query analytics data for the dashboard.
-Walchand Institute of Technology, Solapur — LabPulse Backend
+Dashboard analytics queries.
 
-Supports filters: lab_id, machine_id, student_id, date, date_from, date_to, slot
 Routes: /analytics/usage, /analytics/compliance, /analytics/browser
+Supports filters: lab_id, machine_id, student_id, date, date_from, date_to, slot
 """
 import json
 import os

@@ -1,9 +1,5 @@
-"""
-ingest_summary/handler.py — Lambda: receive hourly summary, write to DynamoDB.
-Walchand Institute of Technology, Solapur — LabPulse Backend
+"""Receive hourly summaries from the agent and write to DynamoDB."""
 
-Accepts app usage, behavior metrics, and browser activity data from the agent.
-"""
 import json
 import os
 import time

@@ -1,10 +1,12 @@
-// Main app shell with routing and layout
 import { useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-import { todayStr } from "./data/mockData";
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 // Pages
 import LoginPage from "./pages/LoginPage";

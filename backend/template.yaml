@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  LabPulse — Centralized Privacy-Preserving Computer Lab Usage Analytics System
+  LabPulse â€” Centralized Privacy-Preserving Computer Lab Usage Analytics System
   Walchand Institute of Technology, Solapur
 
 Globals:
@@ -27,7 +27,7 @@ Parameters:
     NoEcho: true
     Default: change-me-in-production-use-secrets-manager
 
-# ── DynamoDB Tables ──────────────────────────────────────────────────────────
+# â”€â”€ DynamoDB Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Resources:
 
   UsersTable:
@@ -39,6 +39,7 @@ Resources:
         - { AttributeName: student_id,    AttributeType: S }
         - { AttributeName: department,    AttributeType: S }
         - { AttributeName: college_login, AttributeType: S }
+        - { AttributeName: pnr_no,        AttributeType: S }
       KeySchema:
         - { AttributeName: student_id, KeyType: HASH }
       GlobalSecondaryIndexes:
@@ -47,6 +48,9 @@ Resources:
           Projection: { ProjectionType: ALL }
         - IndexName: by_college_login
           KeySchema: [{ AttributeName: college_login, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+        - IndexName: by_pnr
+          KeySchema: [{ AttributeName: pnr_no, KeyType: HASH }]
           Projection: { ProjectionType: ALL }
 
   MachinesTable:
@@ -152,6 +156,16 @@ Resources:
             - { AttributeName: date,       KeyType: RANGE }
           Projection: { ProjectionType: ALL }
 
+  LabsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Labs"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: lab_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: lab_id, KeyType: HASH }
+
   TimetableTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -195,7 +209,7 @@ Resources:
             - { AttributeName: date,   KeyType: RANGE }
           Projection: { ProjectionType: ALL }
 
-# ── Cognito User Pool ─────────────────────────────────────────────────────────
+# â”€â”€ Cognito User Pool â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
@@ -240,7 +254,7 @@ Resources:
       UserPoolId: !Ref CognitoUserPool
       Description: Faculty members with read-only analytics access
 
-# ── HTTP API Gateway ──────────────────────────────────────────────────────────
+# â”€â”€ HTTP API Gateway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -268,7 +282,7 @@ Resources:
               audience:
                 - !Ref CognitoUserPoolClient
 
-# ── Lambda Functions ───────────────────────────────────────────────────────────
+# â”€â”€ Lambda Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   ValidateStudentFunction:
     Type: AWS::Serverless::Function
@@ -367,6 +381,11 @@ Resources:
         - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
         - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
         - DynamoDBCrudPolicy: { TableName: !Ref TimetableTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref LabsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref SessionsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref AppUsageTable }
+        - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
+        - DynamoDBReadPolicy: { TableName: !Ref HourlyReportsTable }
       Events:
         Machines:
           Type: HttpApi
@@ -386,18 +405,24 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/timetable
             Method: ANY
+        Labs:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/labs
+            Method: ANY
 
-# ── Outputs ───────────────────────────────────────────────────────────────────
+# â”€â”€ Outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Outputs:
   ApiUrl:
-    Description: "HTTP API URL — paste into agent config.json as api_base_url"
+    Description: "HTTP API URL â€” paste into agent config.json as api_base_url"
     Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/v1"
 
   CognitoUserPoolId:
-    Description: "Cognito User Pool ID — for dashboard .env"
+    Description: "Cognito User Pool ID â€” for dashboard .env"
     Value: !Ref CognitoUserPool
 
   CognitoClientId:
-    Description: "Cognito App Client ID — for dashboard .env"
+    Description: "Cognito App Client ID â€” for dashboard .env"
     Value: !Ref CognitoUserPoolClient

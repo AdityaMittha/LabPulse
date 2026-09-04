@@ -1,58 +1,108 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { User, Clock, Monitor, CheckCircle2, Activity, Globe, ExternalLink } from "lucide-react";
-import { students, sessions, appUsages, behaviorMetrics, labs, machines, todayStr, formatDuration, getStudentBrowserActivity } from "../data/mockData";
+import { formatDuration } from "../data/mockData";
 import { StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
-import { deleteStudent } from "../api/apiClient";
+import { fetchUsage, fetchStudents, fetchStudentBrowserActivity, deleteStudent, fetchLabs } from "../api/apiClient";
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
-  const navigate = useNavigate();
-  const student = useMemo(() => students.find(s => s.student_id === studentId), [studentId]);
+  const navigate      = useNavigate();
 
-  const studentSessions = useMemo(
-    () => sessions.filter(s => s.student_id === studentId).sort((a, b) => new Date(b.login_time) - new Date(a.login_time)),
-    [studentId]
-  );
+  const [student,        setStudent]        = useState(null);
+  const [labsMap,        setLabsMap]        = useState({});
+  const [sessions,       setSessions]       = useState([]);
+  const [browserData,    setBrowserData]    = useState({ sites: [], page_log: [] });
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(null);
 
-  const complianceCount = {
-    compliant:     studentSessions.filter(s => s.compliance_status === "compliant").length,
-    partial:       studentSessions.filter(s => s.compliance_status === "partial").length,
-    non_compliant: studentSessions.filter(s => s.compliance_status === "non_compliant").length,
-  };
-  const compliancePct = studentSessions.length > 0
-    ? Math.round((complianceCount.compliant / studentSessions.length) * 100) : 0;
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
 
-  const totalTime = studentSessions.reduce((a, s) => a + (s.total_duration || 0), 0);
+    Promise.all([
+      fetchStudents(),
+      fetchUsage({ student_id: studentId }),
+      fetchStudentBrowserActivity(studentId),
+      fetchLabs(),
+    ]).then(([students, sess, browser, labs]) => {
+      if (!active) return;
+      setStudent(students.find(s => s.student_id === studentId) || null);
+      setSessions(sess.sort((a, b) => new Date(b.login_time) - new Date(a.login_time)));
+      setBrowserData(browser);
+      const map = {};
+      labs.forEach(l => { map[l.lab_id] = l; });
+      setLabsMap(map);
+      setLoading(false);
+    }).catch(err => {
+      console.error("StudentDetailPage fetch error:", err);
+      if (active) { setError(err.message); setLoading(false); }
+    });
+
+    return () => { active = false; };
+  }, [studentId]);
+
+  const complianceCount = useMemo(() => ({
+    compliant:     sessions.filter(s => s.compliance_status === "compliant").length,
+    partial:       sessions.filter(s => s.compliance_status === "partial").length,
+    non_compliant: sessions.filter(s => s.compliance_status === "non_compliant").length,
+  }), [sessions]);
+
+  const compliancePct = sessions.length > 0
+    ? Math.round((complianceCount.compliant / sessions.length) * 100) : 0;
+
+  const totalTime = sessions.reduce((a, s) => a + (s.total_duration || 0), 0);
 
   // Per-day session count for bar chart
   const dailyData = useMemo(() => {
     const map = {};
-    studentSessions.forEach(s => {
-      map[s.date] = (map[s.date] || 0) + 1;
-    });
+    sessions.forEach(s => { map[s.date] = (map[s.date] || 0) + 1; });
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date: date.slice(5), count }));
-  }, [studentSessions]);
+  }, [sessions]);
 
-  // Top apps
+  // Top apps aggregated from session app_usages if available
   const topApps = useMemo(() => {
     const map = {};
-    studentSessions.forEach(s => {
-      (appUsages[s.session_id] || []).forEach(a => {
-        map[a.app_name] = (map[a.app_name] || 0) + a.active_duration;
+    sessions.forEach(s => {
+      (s.app_usages || []).forEach(a => {
+        map[a.app_name] = (map[a.app_name] || 0) + (a.active_duration || 0);
       });
     });
     return Object.entries(map)
-      .map(([name, dur]) => ({ name: name.replace(".exe",""), dur }))
+      .map(([name, dur]) => ({ name: name.replace(".exe", ""), dur }))
       .sort((a, b) => b.dur - a.dur)
       .slice(0, 5);
-  }, [studentSessions]);
+  }, [sessions]);
 
-  // Browser activity
-  const browserData = useMemo(() => getStudentBrowserActivity(studentId), [studentId]);
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading student profile…</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load student data</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   if (!student) {
     return <PageWrapper><EmptyState title="Student not found" description="This student ID doesn't exist in the system." /></PageWrapper>;
@@ -75,10 +125,10 @@ export default function StudentDetailPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Sessions"    value={studentSessions.length}     icon={Activity}    color="blue"   />
-        <StatCard label="Total Lab Time"    value={formatDuration(totalTime)}  icon={Clock}       color="green"  />
-        <StatCard label="Compliance Rate"   value={`${compliancePct}%`}        icon={CheckCircle2} color="purple" />
-        <StatCard label="Sites Visited"     value={browserData.sites.length}   icon={Globe}        color="amber"  />
+        <StatCard label="Total Sessions"    value={sessions.length}             icon={Activity}    color="blue"   />
+        <StatCard label="Total Lab Time"    value={formatDuration(totalTime)}   icon={Clock}       color="green"  />
+        <StatCard label="Compliance Rate"   value={`${compliancePct}%`}         icon={CheckCircle2} color="purple" />
+        <StatCard label="Sites Visited"     value={browserData.sites.length}    icon={Globe}        color="amber"  />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -101,7 +151,7 @@ export default function StudentDetailPage() {
           }
         </div>
 
-        {/* Top apps + compliance */}
+        {/* Compliance + Top apps */}
         <div className="space-y-4">
           {/* Compliance breakdown */}
           <div className="card card-body">
@@ -117,7 +167,7 @@ export default function StudentDetailPage() {
               </div>
               <div className="bg-red-50 rounded-lg p-3">
                 <p className="text-2xl font-semibold text-red-500">{complianceCount.non_compliant}</p>
-                <p className="text-xs text-red-700 mt-0.5">Absent</p>
+                <p className="text-xs text-red-700 mt-0.5">Non-compliant</p>
               </div>
             </div>
           </div>
@@ -127,7 +177,7 @@ export default function StudentDetailPage() {
             <SectionHeading title="Top Apps Used" />
             <div className="space-y-2">
               {topApps.length === 0
-                ? <p className="text-sm text-slate-400 text-center py-4">No app data</p>
+                ? <p className="text-sm text-slate-400 text-center py-4">No app usage data available</p>
                 : topApps.map((app, i) => {
                   const maxDur = topApps[0].dur;
                   return (
@@ -214,7 +264,7 @@ export default function StudentDetailPage() {
       <div className="card">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-semibold text-sm text-slate-700">Session History</h3>
-          <span className="text-xs text-slate-400">{studentSessions.length} sessions</span>
+          <span className="text-xs text-slate-400">{sessions.length} sessions</span>
         </div>
         <div className="table-container">
           <table className="table">
@@ -222,12 +272,12 @@ export default function StudentDetailPage() {
               <tr><th>Date</th><th>Lab</th><th>Machine</th><th>Login</th><th>Duration</th><th>Course</th><th>Compliance</th></tr>
             </thead>
             <tbody>
-              {studentSessions.length === 0
+              {sessions.length === 0
                 ? <tr><td colSpan={7} className="text-center text-slate-400 py-8">No lab sessions found for this student.</td></tr>
-                : studentSessions.slice(0, 15).map(s => (
+                : sessions.slice(0, 15).map(s => (
                   <tr key={s.session_id}>
                     <td className="text-xs text-slate-400">{s.date}</td>
-                    <td className="text-xs">{labs.find(l=>l.lab_id===s.lab_id)?.name || s.lab_id}</td>
+                    <td className="text-xs">{labsMap[s.lab_id]?.name || s.lab_id}</td>
                     <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs text-primary-600 hover:underline">{s.machine_id}</Link></td>
                     <td className="text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
                     <td className="num">{formatDuration(s.total_duration)}</td>
@@ -243,7 +293,7 @@ export default function StudentDetailPage() {
 
       {/* Danger Zone */}
       <div className="card mt-6 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100">
           <h3 className="font-semibold text-sm text-red-600">Danger Zone</h3>
         </div>
         <div className="p-5">
@@ -269,7 +319,7 @@ export default function StudentDetailPage() {
               }}
               className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
             >
-              Delete Student & All Data
+              Delete Student &amp; All Data
             </button>
           </div>
         </div>

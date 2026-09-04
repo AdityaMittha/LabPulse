@@ -1,8 +1,5 @@
-"""
-summarizer.py — Hourly summary generation for the LabPulse agent.
-Wraps tracker snapshot into the JSON payload for AWS ingestion.
-Walchand Institute of Technology, Solapur
-"""
+"""Builds the hourly JSON payload from a tracker snapshot."""
+
 import logging
 import time
 import uuid

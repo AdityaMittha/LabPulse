@@ -1,5 +1,3 @@
-// Auth context — Cognito authentication with mock fallback
-// Walchand Institute of Technology, Solapur — LabPulse
 import { createContext, useContext, useState, useCallback } from "react";
 
 const AuthContext = createContext(null);

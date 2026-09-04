@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import { FileBarChart2, Download } from "lucide-react";
-import { labs, sessions, getComplianceStats } from "../data/mockData";
 import { StatCard, SectionHeading, PageWrapper } from "../components/Shared";
 import { useAuth } from "../auth/AuthContext";
+import { fetchLabs, fetchUsage } from "../api/apiClient";
 
 function getLast7Days() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -16,29 +16,72 @@ function getLast7Days() {
   });
 }
 
+const COLORS = ["#0d9488","#14b8a6","#78716c","#d97706"];
+
 export default function ReportsPage() {
   const { user, isAdmin } = useAuth();
-  const [selectedLab, setSelectedLab] = useState("ALL");
   const days = getLast7Days();
+  const dateFrom = days[0];
+  const dateTo   = days[days.length - 1];
+
+  const [labs,         setLabs]         = useState([]);
+  const [sessions,     setSessions]     = useState([]);
+  const [selectedLab,  setSelectedLab]  = useState("ALL");
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+
+    // Fetch labs first, then fetch sessions for each visible lab for the 7-day window
+    fetchLabs().then(labsList => {
+      if (!active) return;
+      setLabs(labsList);
+
+      const visibleLabs = isAdmin
+        ? labsList
+        : labsList.filter(l => l.department?.includes(user?.department) || user?.department?.includes(l.department));
+
+      // Fetch per-lab to avoid a full table scan; catch individual errors so partial data still displays
+      const fetchPromises = visibleLabs.length > 0
+        ? visibleLabs.map(l => fetchUsage({ lab_id: l.lab_id, date_from: dateFrom, date_to: dateTo, limit: 500 }).catch(err => {
+            console.warn(`Usage fetch failed for lab ${l.lab_id}:`, err);
+            return [];
+          }))
+        : [fetchUsage({ date_from: dateFrom, date_to: dateTo, limit: 500 }).catch(() => [])];
+
+      return Promise.all(fetchPromises);
+    }).then(results => {
+      if (!active || !results) return;
+      const merged = results.flat();
+      setSessions(merged);
+      setLoading(false);
+    }).catch(err => {
+      console.error("ReportsPage fetch error:", err);
+      if (active) { setError(err.message); setLoading(false); }
+    });
+
+    return () => { active = false; };
+  }, [isAdmin, user.department, dateFrom, dateTo]);
 
   const visibleLabs = useMemo(() => {
     if (isAdmin) return labs;
-    return labs.filter(l => l.department.includes(user.department) || user.department.includes(l.department));
-  }, [isAdmin, user]);
+    return labs.filter(l =>
+      l.department?.includes(user.department) || user.department?.includes(l.department)
+    );
+  }, [isAdmin, user, labs]);
 
   const visibleLabIds = useMemo(() => visibleLabs.map(l => l.lab_id), [visibleLabs]);
 
   const trendData = useMemo(() => {
     return days.map(date => {
-      let labFilter;
-      if (selectedLab === "ALL") {
-        labFilter = sessions.filter(s => visibleLabIds.includes(s.lab_id));
-      } else {
-        labFilter = sessions.filter(s => s.lab_id === selectedLab);
-      }
-      const day = labFilter.filter(s => s.date === date);
-      const compliant = day.filter(s => s.compliance_status === "compliant").length;
-      const total = day.length;
+      const filtered = selectedLab === "ALL"
+        ? sessions.filter(s => visibleLabIds.includes(s.lab_id) && s.date === date)
+        : sessions.filter(s => s.lab_id === selectedLab && s.date === date);
+      const compliant = filtered.filter(s => s.compliance_status === "compliant").length;
+      const total     = filtered.length;
       return {
         date: date.slice(5),
         sessions: total,
@@ -46,7 +89,7 @@ export default function ReportsPage() {
         compliancePct: total > 0 ? Math.round((compliant / total) * 100) : 0,
       };
     });
-  }, [selectedLab, visibleLabIds, days]);
+  }, [sessions, selectedLab, visibleLabIds, days]);
 
   const labTrend = useMemo(() => {
     return days.map(date => {
@@ -57,24 +100,45 @@ export default function ReportsPage() {
       });
       return entry;
     });
-  }, [visibleLabs, days]);
+  }, [visibleLabs, sessions, days]);
 
   const totals = useMemo(() => {
-    let filtered;
-    if (selectedLab === "ALL") {
-      filtered = sessions.filter(s => visibleLabIds.includes(s.lab_id));
-    } else {
-      filtered = sessions.filter(s => s.lab_id === selectedLab);
-    }
+    const filtered = selectedLab === "ALL"
+      ? sessions.filter(s => visibleLabIds.includes(s.lab_id))
+      : sessions.filter(s => s.lab_id === selectedLab);
     const compliant = filtered.filter(s => s.compliance_status === "compliant").length;
     return {
-      total: filtered.length,
+      total:    filtered.length,
       compliant,
       pct: filtered.length > 0 ? Math.round((compliant / filtered.length) * 100) : 0,
     };
-  }, [selectedLab, visibleLabIds]);
+  }, [sessions, selectedLab, visibleLabIds]);
 
-  const COLORS = ["#0d9488","#14b8a6","#78716c","#d97706"];
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
+            <span className="text-sm text-slate-400">Loading 7-day reports…</span>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load reports</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

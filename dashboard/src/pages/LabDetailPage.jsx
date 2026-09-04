@@ -3,15 +3,13 @@ import { useParams, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Monitor, Users, CheckCircle2, Clock, Activity, Globe } from "lucide-react";
+import { Monitor, Users, CheckCircle2, Activity, Globe } from "lucide-react";
+import { todayStr, formatDuration } from "../data/mockData";
 import {
-  labs, appUsages, getHourlyUtilization,
-  getComplianceStats, todayStr, formatDuration
-} from "../data/mockData";
-import {
-  StatCard, ComplianceBadge, MachineStatusBadge,
-  SectionHeading, EmptyState, PageWrapper
+  StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper
 } from "../components/Shared";
+import { fetchUsage, fetchMachines, fetchTopSites, fetchLabs } from "../api/apiClient";
+import { useAuth } from "../auth/AuthContext";
 
 // Heatmap: hour × day
 const HOURS = ["9","10","11","12","13","14","15","16","17"];
@@ -36,88 +34,88 @@ function HeatmapCell({ value, max }) {
   );
 }
 
-import { fetchUsage, fetchMachines, fetchTopSites } from "../api/apiClient";
-import { useAuth } from "../auth/AuthContext";
-
 export default function LabDetailPage({ globalDate }) {
   const { labId } = useParams();
   const { user, isAdmin } = useAuth();
-  const lab = labs.find(l => l.lab_id === labId);
-
-  const isAuthorized = useMemo(() => {
-    if (isAdmin) return true;
-    if (!lab) return false;
-    return lab.department.includes(user.department) || user.department.includes(lab.department);
-  }, [lab, isAdmin, user]);
-
   const today = globalDate || todayStr();
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [machinesData, setMachinesData] = useState([]);
-  const [sessionsData, setSessionsData] = useState([]);
+
+  const [labInfo,        setLabInfo]        = useState(null);
+  const [machinesData,   setMachinesData]   = useState([]);
+  const [sessionsData,   setSessionsData]   = useState([]);
   const [allLabSessions, setAllLabSessions] = useState([]);
-  const [topSitesData, setTopSitesData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [topSitesData,   setTopSitesData]   = useState([]);
+  const [selectedDate,   setSelectedDate]   = useState(today);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(null);
 
   useEffect(() => {
-    if (globalDate) {
-      setSelectedDate(globalDate);
-    }
+    if (globalDate) setSelectedDate(globalDate);
   }, [globalDate]);
+
+  // Fetch lab info once
+  useEffect(() => {
+    fetchLabs().then(labs => {
+      setLabInfo(labs.find(l => l.lab_id === labId) || null);
+    }).catch(() => setLabInfo(null));
+  }, [labId]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
 
     Promise.all([
       fetchMachines(labId),
       fetchUsage({ lab_id: labId, date: selectedDate }),
-      fetchUsage({ lab_id: labId }), // for heatmap
-      fetchTopSites(labId, selectedDate)
+      fetchUsage({ lab_id: labId }),        // for heatmap (all dates)
+      fetchTopSites(labId, selectedDate),
     ]).then(([machs, sess, allSess, sites]) => {
       if (active) {
-        setMachinesData(machs || []);
-        setSessionsData(sess || []);
+        setMachinesData(machs    || []);
+        setSessionsData(sess     || []);
         setAllLabSessions(allSess || []);
-        setTopSitesData(sites || []);
+        setTopSitesData(sites    || []);
         setLoading(false);
       }
     }).catch(err => {
-      console.error(err);
-      if (active) setLoading(false);
+      console.error("LabDetailPage fetch error:", err);
+      if (active) { setError(err.message); setLoading(false); }
     });
 
     return () => { active = false; };
   }, [labId, selectedDate]);
 
-  const labMachines = machinesData;
+  const isAuthorized = useMemo(() => {
+    if (isAdmin) return true;
+    if (!labInfo) return false;
+    return labInfo.department?.includes(user.department) || user.department?.includes(labInfo.department);
+  }, [labInfo, isAdmin, user]);
+
   const daySessions = sessionsData;
 
   const hourlyData = useMemo(() => {
     return Array.from({ length: 9 }, (_, i) => {
-      const hour = i + 9;
-      const count = daySessions.filter(s => {
-        const d = new Date(s.login_time);
-        return d.getHours() === hour || d.getUTCHours() + 5.5 === hour;
-      }).length;
+      const hour  = i + 9;
+      const count = daySessions.filter(s => new Date(s.login_time).getHours() === hour).length;
       return { hour: `${hour}:00`, sessions: count };
     });
   }, [daySessions]);
 
   const complianceSt = useMemo(() => {
-    const total = daySessions.length;
-    const compliant = daySessions.filter(s => s.compliance_status === "compliant").length;
-    const partial = daySessions.filter(s => s.compliance_status === "partial").length;
+    const total         = daySessions.length;
+    const compliant     = daySessions.filter(s => s.compliance_status === "compliant").length;
+    const partial       = daySessions.filter(s => s.compliance_status === "partial").length;
     const non_compliant = daySessions.filter(s => s.compliance_status === "non_compliant").length;
     return { total, compliant, partial, non_compliant };
   }, [daySessions]);
 
-  // Heatmap data: sessions[day][hour]
+  // Heatmap: sessions[day][hour]
   const heatmapData = useMemo(() => {
     const map = {};
     DAYS.forEach(d => { map[d] = {}; HOURS.forEach(h => { map[d][h] = 0; }); });
     allLabSessions.forEach(s => {
-      const dt = new Date(s.login_time);
-      const day = DAYS[dt.getDay() - 1];
+      const dt   = new Date(s.login_time);
+      const day  = DAYS[dt.getDay() - 1];
       const hour = String(dt.getHours());
       if (day && map[day] && map[day][hour] !== undefined) map[day][hour]++;
     });
@@ -143,8 +141,21 @@ export default function LabDetailPage({ globalDate }) {
     );
   }
 
-  if (!lab) {
-    return <PageWrapper><EmptyState title="Lab not found" description="This lab doesn't exist." /></PageWrapper>;
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-red-500 font-medium text-sm">Failed to load lab data</p>
+            <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (!labInfo) {
+    return <PageWrapper><EmptyState title="Lab not found" description="This lab doesn't exist or hasn't loaded yet." /></PageWrapper>;
   }
 
   if (!isAuthorized) {
@@ -166,8 +177,8 @@ export default function LabDetailPage({ globalDate }) {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">{lab.name}</h1>
-          <p className="page-subtitle">{lab.building} · {lab.floor} Floor · {lab.department}</p>
+          <h1 className="page-title">{labInfo.name}</h1>
+          <p className="page-subtitle">{labInfo.building} · {labInfo.floor} Floor · {labInfo.department}</p>
         </div>
         <div className="flex items-center gap-2">
           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
@@ -177,17 +188,17 @@ export default function LabDetailPage({ globalDate }) {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Sessions"         value={daySessions.length}    icon={Activity}    color="blue"  />
-        <StatCard label="Compliance"       value={`${compliancePct}%`}   icon={CheckCircle2} color="green" />
-        <StatCard label="Machines"         value={`${labMachines.filter(m=>m.status==="active").length}/${labMachines.length}`} icon={Monitor} color="purple"/>
-        <StatCard label="Compliant"        value={complianceSt.compliant} icon={Users}        color="amber" />
+        <StatCard label="Sessions"   value={daySessions.length}    icon={Activity}    color="blue"  />
+        <StatCard label="Compliance" value={`${compliancePct}%`}   icon={CheckCircle2} color="green" />
+        <StatCard label="Machines"   value={`${machinesData.filter(m=>m.status==="active").length}/${machinesData.length}`} icon={Monitor} color="purple"/>
+        <StatCard label="Compliant"  value={complianceSt.compliant} icon={Users}       color="amber" />
       </div>
 
       {/* Machine grid */}
       <div className="card card-body mb-6">
         <SectionHeading title="Machine Grid" />
         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-          {labMachines.map(m => {
+          {machinesData.map(m => {
             const mSessions = daySessions.filter(s => s.machine_id === m.machine_id);
             const utilColor = mSessions.length === 0
               ? "bg-slate-100 text-slate-400"
@@ -205,6 +216,7 @@ export default function LabDetailPage({ globalDate }) {
             );
           })}
         </div>
+        {machinesData.length === 0 && <p className="text-slate-400 text-sm text-center py-4">No machines registered for this lab.</p>}
         <div className="flex items-center gap-4 mt-4 text-xs text-slate-400">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-slate-100" /> Idle</div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-primary-50" /> Low</div>

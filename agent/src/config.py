@@ -1,7 +1,4 @@
-"""
-config.py — Reads and validates config.json for the LabPulse agent.
-Walchand Institute of Technology, Solapur
-"""
+"""Loads and validates agent configuration from config.json."""
 import json
 import os
 import sys

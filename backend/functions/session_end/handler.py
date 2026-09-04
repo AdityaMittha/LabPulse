@@ -1,12 +1,11 @@
 """
-session_end/handler.py — Lambda: finalize session, compute compliance status.
-Walchand Institute of Technology, Solapur — LabPulse Backend
+Finalize a session and compute compliance status.
 
-Compliance rules:
-  - compliant:     active_time >= 70% of slot duration
-  - partial:       active_time >= 20% of slot duration
-  - non_compliant: active_time <  20% of slot duration
-  - no_slot:       no timetable slot was assigned
+Thresholds:
+  compliant     — active_time >= 70% of slot duration
+  partial       — active_time >= 20%
+  non_compliant — active_time <  20%
+  no_slot       — no timetable slot assigned
 """
 import json
 import os
