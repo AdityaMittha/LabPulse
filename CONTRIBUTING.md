@@ -17,7 +17,12 @@ Thanks for your interest! Here's how to get started.
    venv\Scripts\activate
    pip install -r requirements.txt
    ```
-3. For the backend, install [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and run `sam build` / `sam deploy --guided` from the `backend/` directory.
+3. For the backend, install [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and run:
+   ```bash
+   cd backend
+   sam build
+   sam deploy --stack-name labpulse --region ap-south-1 --capabilities CAPABILITY_IAM --resolve-s3
+   ```
 
 ## Pull requests
 
