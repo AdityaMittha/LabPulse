@@ -166,6 +166,16 @@ Resources:
       KeySchema:
         - { AttributeName: lab_id, KeyType: HASH }
 
+  DepartmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TablePrefix}-Departments"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: department_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: department_id, KeyType: HASH }
+
   TimetableTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -382,6 +392,7 @@ Resources:
         - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
         - DynamoDBCrudPolicy: { TableName: !Ref TimetableTable }
         - DynamoDBCrudPolicy: { TableName: !Ref LabsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref DepartmentsTable }
         - DynamoDBCrudPolicy: { TableName: !Ref SessionsTable }
         - DynamoDBReadPolicy: { TableName: !Ref AppUsageTable }
         - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
@@ -410,6 +421,12 @@ Resources:
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/labs
+            Method: ANY
+        Departments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/departments
             Method: ANY
 
 # â”€â”€ Outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

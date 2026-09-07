@@ -58,6 +58,29 @@ export async function deleteLab(labId) {
   return data;
 }
 
+// ── Departments ──────────────────────────────────────────────────────────────
+
+export async function fetchDepartments() {
+  const data = await apiFetch("/admin/departments");
+  return data.departments || [];
+}
+
+export async function addDepartment({ department_id, name, code, building, hod_name }) {
+  const data = await apiFetch("/admin/departments", {
+    method: "POST",
+    body: JSON.stringify({ department_id, name, code, building, hod_name }),
+  });
+  return data;
+}
+
+export async function deleteDepartment(departmentId) {
+  const data = await apiFetch(`/admin/departments?department_id=${encodeURIComponent(departmentId)}`, {
+    method: "DELETE",
+  });
+  return data;
+}
+
+
 // ── Machines ─────────────────────────────────────────────────────────────────
 
 export async function fetchMachines(labId = "") {

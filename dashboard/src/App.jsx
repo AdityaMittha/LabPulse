@@ -17,6 +17,7 @@ import MachineDetailPage from "./pages/MachineDetailPage";
 import StudentDetailPage from "./pages/StudentDetailPage";
 import CompliancePage from "./pages/CompliancePage";
 import ReportsPage from "./pages/ReportsPage";
+import AdminDepartmentsPage from "./pages/AdminDepartmentsPage";
 import AdminLabsPage from "./pages/AdminLabsPage";
 import AdminMachinesPage from "./pages/AdminMachinesPage";
 import AdminStudentsPage from "./pages/AdminStudentsPage";
@@ -25,14 +26,15 @@ import NotFoundPage from "./pages/NotFoundPage";
 
 // Breadcrumb map
 const BREADCRUMBS = {
-  "/":                [{ label: "Overview" }],
-  "/labs":            [{ label: "Overview", to: "/" }, { label: "Labs" }],
-  "/compliance":      [{ label: "Overview", to: "/" }, { label: "Compliance" }],
-  "/reports":         [{ label: "Overview", to: "/" }, { label: "Reports" }],
-  "/admin/labs":      [{ label: "Admin" }, { label: "Labs" }],
-  "/admin/machines":  [{ label: "Admin" }, { label: "Machines" }],
-  "/admin/students":  [{ label: "Admin" }, { label: "Students" }],
-  "/admin/timetable": [{ label: "Admin" }, { label: "Timetable" }],
+  "/":                  [{ label: "Overview" }],
+  "/labs":              [{ label: "Overview", to: "/" }, { label: "Labs" }],
+  "/compliance":        [{ label: "Overview", to: "/" }, { label: "Compliance" }],
+  "/reports":           [{ label: "Overview", to: "/" }, { label: "Reports" }],
+  "/admin/departments": [{ label: "Admin" }, { label: "Departments" }],
+  "/admin/labs":        [{ label: "Admin" }, { label: "Labs" }],
+  "/admin/machines":    [{ label: "Admin" }, { label: "Machines" }],
+  "/admin/students":    [{ label: "Admin" }, { label: "Students" }],
+  "/admin/timetable":   [{ label: "Admin" }, { label: "Timetable" }],
 };
 
 function DepartmentSelector() {
@@ -130,10 +132,11 @@ function ProtectedLayout({ requireAdmin = false }) {
             <Route path="/compliance" element={<CompliancePage globalDate={globalDate} />} />
             <Route path="/reports" element={<ReportsPage />} />
             {isAdmin && <>
-              <Route path="/admin/labs"      element={<AdminLabsPage />} />
-              <Route path="/admin/machines"  element={<AdminMachinesPage />} />
-              <Route path="/admin/students"  element={<AdminStudentsPage />} />
-              <Route path="/admin/timetable" element={<AdminTimetablePage />} />
+              <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+              <Route path="/admin/labs"        element={<AdminLabsPage />} />
+              <Route path="/admin/machines"    element={<AdminMachinesPage />} />
+              <Route path="/admin/students"    element={<AdminStudentsPage />} />
+              <Route path="/admin/timetable"   element={<AdminTimetablePage />} />
             </>}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

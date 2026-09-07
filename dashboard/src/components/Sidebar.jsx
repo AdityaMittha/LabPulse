@@ -5,7 +5,7 @@ import { COLLEGE } from "../data/mockData";
 import {
   LayoutDashboard, FlaskConical, Monitor, Users,
   ClipboardCheck, FileBarChart2, Settings, LogOut,
-  ChevronRight, Cpu, BookOpen, Download
+  ChevronRight, Cpu, BookOpen, Download, Building2
 } from "lucide-react";
 
 const navItems = [
@@ -16,10 +16,11 @@ const navItems = [
 ];
 
 const adminItems = [
-  { to: "/admin/labs",      label: "Labs",      icon: FlaskConical },
-  { to: "/admin/machines",  label: "Machines",  icon: Cpu },
-  { to: "/admin/students",  label: "Students",  icon: Users },
-  { to: "/admin/timetable", label: "Timetable", icon: BookOpen },
+  { to: "/admin/departments", label: "Departments", icon: Building2 },
+  { to: "/admin/labs",        label: "Labs",        icon: FlaskConical },
+  { to: "/admin/machines",    label: "Machines",    icon: Cpu },
+  { to: "/admin/students",    label: "Students",    icon: Users },
+  { to: "/admin/timetable",   label: "Timetable",   icon: BookOpen },
 ];
 
 function NavItem({ to, label, icon: Icon, end = false }) {

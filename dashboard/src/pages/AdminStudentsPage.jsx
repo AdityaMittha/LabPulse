@@ -2,9 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, Users, GraduationCap } from "lucide-react";
 import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchStudents, deleteStudent, addStudent } from "../api/apiClient";
-
-const DEPTS = ["CSE", "IT", "E&TC"];
+import { fetchStudents, deleteStudent, addStudent, fetchDepartments } from "../api/apiClient";
 const YEARS = ["FE", "SE", "TE", "BE"];
 const YEAR_LABELS = { FE: "First Year", SE: "Second Year", TE: "Third Year", BE: "Final Year" };
 
@@ -22,6 +20,7 @@ const YEAR_COLORS = {
 };
 
 export default function AdminStudentsPage() {
+  const [departments, setDepartments] = useState([]);
   const [students,    setStudents]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
@@ -32,17 +31,39 @@ export default function AdminStudentsPage() {
   const [submitting,  setSubmitting]  = useState(false);
   const [form, setForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
 
-  const [expandedDepts, setExpandedDepts] = useState(() => new Set(DEPTS));
-  const [expandedYears, setExpandedYears] = useState(() => new Set());
-
-  // Load students from API
+  // Load students & departments from API
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetchStudents()
-      .then(data => { setStudents(data); setLoading(false); })
-      .catch(err  => { setError(err.message); setLoading(false); });
+    Promise.all([fetchStudents(), fetchDepartments().catch(() => [])])
+      .then(([studentsData, deptsData]) => {
+        setStudents(studentsData);
+        setDepartments(deptsData);
+        if (deptsData.length > 0) {
+          setForm(f => ({ ...f, department: deptsData[0].department_id || deptsData[0].code }));
+        }
+        setLoading(false);
+      })
+      .catch(err => { setError(err.message); setLoading(false); });
   }, []);
+
+  const deptList = useMemo(() => {
+    const list = departments.map(d => d.department_id || d.code);
+    students.forEach(s => {
+      if (s.department && !list.includes(s.department)) {
+        list.push(s.department);
+      }
+    });
+    return list.length > 0 ? list : ["CSE", "IT", "E&TC"];
+  }, [departments, students]);
+
+  const [expandedDepts, setExpandedDepts] = useState(() => new Set());
+
+  useEffect(() => {
+    if (deptList.length > 0) {
+      setExpandedDepts(new Set(deptList));
+    }
+  }, [deptList]);
 
   const toggleDept = dept => {
     setExpandedDepts(prev => {
@@ -70,23 +91,27 @@ export default function AdminStudentsPage() {
 
   const grouped = useMemo(() => {
     const map = {};
-    DEPTS.forEach(d => {
+    deptList.forEach(d => {
       map[d] = {};
       YEARS.forEach(y => { map[d][y] = []; });
     });
     filtered.forEach(s => {
-      if (map[s.department] && map[s.department][s.year]) {
+      if (!map[s.department]) {
+        map[s.department] = {};
+        YEARS.forEach(y => { map[s.department][y] = []; });
+      }
+      if (map[s.department][s.year]) {
         map[s.department][s.year].push(s);
       }
     });
     return map;
-  }, [filtered]);
+  }, [filtered, deptList]);
 
   const deptCounts = useMemo(() => {
     const counts = {};
-    DEPTS.forEach(d => { counts[d] = students.filter(s => s.department === d).length; });
+    deptList.forEach(d => { counts[d] = students.filter(s => s.department === d).length; });
     return counts;
-  }, [students]);
+  }, [students, deptList]);
 
   const handleAdd = async () => {
     if (!form.name || !form.student_id) return;
@@ -115,7 +140,7 @@ export default function AdminStudentsPage() {
     }
   };
 
-  const visibleDepts = deptFilter === "ALL" ? DEPTS : [deptFilter];
+  const visibleDepts = deptFilter === "ALL" ? deptList : [deptFilter];
   const visibleYears = yearFilter === "ALL" ? YEARS : [yearFilter];
 
   if (loading) {
@@ -159,9 +184,9 @@ export default function AdminStudentsPage() {
 
       {/* Department stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {DEPTS.map(d => {
-          const c     = DEPT_COLORS[d];
-          const count = deptCounts[d];
+        {deptList.map(d => {
+          const c     = DEPT_COLORS[d] || { bg: "bg-slate-50", border: "border-slate-200", accent: "bg-primary-600", text: "text-primary-700", ring: "ring-primary-200" };
+          const count = deptCounts[d] || 0;
           return (
             <button key={d} onClick={() => setDeptFilter(prev => prev === d ? "ALL" : d)}
               className={`stat-card text-left transition-all ${deptFilter === d ? `ring-2 ${c.ring}` : "hover:bg-slate-50/50"}`}>
@@ -186,14 +211,14 @@ export default function AdminStudentsPage() {
         </div>
         <select className="form-select w-28" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="ALL">All Depts</option>
-          {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+          {deptList.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select className="form-select w-28" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value="ALL">All Years</option>
           {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <button className="btn-secondary btn-sm text-xs"
-          onClick={() => { setExpandedDepts(new Set(DEPTS)); setExpandedYears(new Set(DEPTS.flatMap(d => YEARS.map(y => `${d}-${y}`)))); }}>
+          onClick={() => { setExpandedDepts(new Set(deptList)); setExpandedYears(new Set(deptList.flatMap(d => YEARS.map(y => `${d}-${y}`)))); }}>
           Expand All
         </button>
         <button className="btn-secondary btn-sm text-xs"
@@ -205,7 +230,7 @@ export default function AdminStudentsPage() {
       {/* Department accordion cards */}
       <div className="space-y-4">
         {visibleDepts.map(dept => {
-          const c            = DEPT_COLORS[dept];
+          const c            = DEPT_COLORS[dept] || { bg: "bg-slate-50", border: "border-slate-200", accent: "bg-primary-600", text: "text-primary-700", ring: "ring-primary-200" };
           const deptStudents = filtered.filter(s => s.department === dept);
           const isDeptOpen   = expandedDepts.has(dept);
 
@@ -346,7 +371,7 @@ export default function AdminStudentsPage() {
                 <div>
                   <label className="form-label">Department</label>
                   <select className="form-select" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
-                    {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    {deptList.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>

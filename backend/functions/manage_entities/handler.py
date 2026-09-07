@@ -16,6 +16,7 @@ machines_table       = dynamodb.Table(f"{TABLE_PREFIX}-Machines")
 students_table       = dynamodb.Table(f"{TABLE_PREFIX}-Users")
 timetable_table      = dynamodb.Table(f"{TABLE_PREFIX}-Timetable")
 labs_table           = dynamodb.Table(f"{TABLE_PREFIX}-Labs")
+departments_table    = dynamodb.Table(f"{TABLE_PREFIX}-Departments")
 sessions_table       = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
 app_usage_table      = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
 behavior_table       = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
@@ -150,6 +151,8 @@ def lambda_handler(event, context):
         return _handle_timetable(method, body, event)
     elif "/labs" in path:
         return _handle_labs(method, body, event)
+    elif "/departments" in path:
+        return _handle_departments(method, body, event)
     else:
         return _cors({"error": "Unknown entity"}, 404)
 
@@ -317,3 +320,45 @@ def _handle_labs(method, body, event):
         return _cors({"status": "deleted"})
 
     return _cors({"error": "Method not allowed"}, 405)
+
+
+# ── Departments ─────────────────────────────────────────────────────────────
+
+def _handle_departments(method, body, event):
+    qs = event.get("queryStringParameters") or {}
+    if method == "GET":
+        resp = departments_table.scan()
+        items = resp.get("Items", [])
+        items.sort(key=lambda d: d.get("department_id", ""))
+        return _cors({"departments": items})
+
+    if method == "POST":
+        dept_id  = (body.get("department_id") or body.get("code") or "").strip().upper()
+        name     = (body.get("name") or "").strip()
+        code     = (body.get("code") or dept_id).strip().upper()
+        building = (body.get("building") or "").strip()
+        hod_name = (body.get("hod_name") or "").strip()
+
+        if not dept_id or not name:
+            return _cors({"error": "department_id and name required"}, 400)
+
+        item = {
+            "department_id": dept_id,
+            "name":          name,
+            "code":          code,
+            "building":      building,
+            "hod_name":      hod_name,
+            "created_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        departments_table.put_item(Item=item)
+        return _cors({"department_id": dept_id, "status": "created"}, 201)
+
+    if method == "DELETE":
+        dept_id = qs.get("department_id") or body.get("department_id")
+        if not dept_id:
+            return _cors({"error": "department_id required"}, 400)
+        departments_table.delete_item(Key={"department_id": dept_id})
+        return _cors({"status": "deleted"})
+
+    return _cors({"error": "Method not allowed"}, 405)
+

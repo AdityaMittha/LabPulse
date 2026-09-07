@@ -2,13 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, FlaskConical, MapPin, Cpu, Users, ChevronRight, Layers } from "lucide-react";
 import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchLabs, fetchMachines, addLab, deleteLab } from "../api/apiClient";
-
-const DEPTS = ["CSE", "IT", "E&TC", "Other"];
+import { fetchLabs, fetchMachines, addLab, deleteLab, fetchDepartments } from "../api/apiClient";
 
 export default function AdminLabsPage() {
   const [labs,       setLabs]       = useState([]);
   const [machines,   setMachines]   = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
   const [search,     setSearch]     = useState("");
@@ -27,10 +26,14 @@ export default function AdminLabsPage() {
   const loadData = () => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchLabs(), fetchMachines()])
-      .then(([labsList, machList]) => {
+    Promise.all([fetchLabs(), fetchMachines(), fetchDepartments().catch(() => [])])
+      .then(([labsList, machList, deptList]) => {
         setLabs(labsList);
         setMachines(machList);
+        setDepartments(deptList);
+        if (deptList.length > 0 && !form.department) {
+          setForm(f => ({ ...f, department: deptList[0].department_id || deptList[0].code }));
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -153,7 +156,10 @@ export default function AdminLabsPage() {
           onChange={e => setDeptFilter(e.target.value)}
         >
           <option value="ALL">All Departments</option>
-          {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+          {departments.map(d => {
+            const code = d.department_id || d.code;
+            return <option key={code} value={code}>{code} – {d.name}</option>;
+          })}
         </select>
       </div>
 
@@ -265,14 +271,32 @@ export default function AdminLabsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">Department</label>
-                  <select
-                    className="form-select"
-                    value={form.department}
-                    onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                  >
-                    {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="form-label mb-0">Department</label>
+                    <Link to="/admin/departments" className="text-[11px] text-primary-600 hover:underline">
+                      Manage Depts
+                    </Link>
+                  </div>
+                  {departments.length === 0 ? (
+                    <input
+                      type="text"
+                      className="form-input uppercase"
+                      placeholder="e.g. CSE"
+                      value={form.department}
+                      onChange={e => setForm(f => ({ ...f, department: e.target.value.toUpperCase() }))}
+                    />
+                  ) : (
+                    <select
+                      className="form-select"
+                      value={form.department}
+                      onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+                    >
+                      {departments.map(d => {
+                        const code = d.department_id || d.code;
+                        return <option key={code} value={code}>{code} – {d.name}</option>;
+                      })}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="form-label">Capacity (Seats)</label>
