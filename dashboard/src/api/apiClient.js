@@ -22,6 +22,14 @@ async function apiFetch(path, options = {}) {
   const url = `${BASE_URL}${path}`;
   const resp = await fetch(url, { headers: getAuthHeaders(), ...options });
   if (!resp.ok) {
+    if (resp.status === 401) {
+      sessionStorage.removeItem("labpulse_token");
+      sessionStorage.removeItem("labpulse_user");
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+      throw new Error("Session expired. Please log in again.");
+    }
     const errText = await resp.text().catch(() => "");
     throw new Error(`API error ${resp.status}: ${errText || resp.statusText}`);
   }
@@ -147,11 +155,16 @@ export async function fetchCompliance(labId, date, slot = "") {
 // ── Browser Activity ──────────────────────────────────────────────────────────
 
 export async function fetchTopSites(labId, date) {
-  const params = new URLSearchParams();
-  if (labId) params.append("lab_id", labId);
-  if (date)  params.append("date", date);
-  const data = await apiFetch(`/analytics/browser?${params.toString()}`);
-  return data.top_sites || [];
+  try {
+    const params = new URLSearchParams();
+    if (labId) params.append("lab_id", labId);
+    if (date)  params.append("date", date);
+    const data = await apiFetch(`/analytics/browser?${params.toString()}`);
+    return data.top_sites || [];
+  } catch (err) {
+    console.warn("Could not fetch top sites:", err);
+    return [];
+  }
 }
 
 export async function fetchStudentBrowserActivity(studentId) {

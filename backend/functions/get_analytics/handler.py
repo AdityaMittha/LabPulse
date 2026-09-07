@@ -160,8 +160,13 @@ def _get_browser(qs: dict):
             ScanIndexForward=False,
         )
         items = resp.get("Items", [])
+    elif date:
+        filter_expr = Attr("date").eq(date)
+        resp = browser_activity_table.scan(FilterExpression=filter_expr, Limit=limit)
+        items = resp.get("Items", [])
     else:
-        return _cors({"error": "Provide session_id, student_id, or lab_id+date"}, 400)
+        resp = browser_activity_table.scan(Limit=limit)
+        items = resp.get("Items", [])
 
     # Parse stored JSON for each item
     results = []
