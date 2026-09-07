@@ -190,24 +190,21 @@ aws s3 sync ./dist s3://<your-s3-bucket-name> --delete
 ```
 
 ### 3. Deploy Lab Agent to Windows PCs
-1. Navigate to **Admin → Machines** in the dashboard.
-2. Register a new machine (e.g. `CSL1-PC-01`) to generate an API Key.
-3. Download the Agent pack from the sidebar (**Download Agent Pack**).
-4. Run PowerShell as Administrator on the target machine:
+> [!TIP]
+> For the complete, step-by-step installation guide, multi-PC deployment guide, and troubleshooting notes, see:
+> - [**SETUP.md**](SETUP.md) (Markdown formatted guide)
+> - [**SETUP.txt**](SETUP.txt) (Plain text version for Notepad)
+
+Quick setup on a lab PC:
+1. Register the machine in **Admin → Machines** to obtain its unique `api_key` (`lp_...`).
+2. Download the Agent pack from the sidebar (**Download Agent Pack**) or copy the `agent/` folder to `C:\LabPulse`.
+3. In `C:\LabPulse\config.json`, enter the `machine_id` (e.g. `CSL1-PC-01`), `lab_id`, and `api_key`.
+4. Open PowerShell as Administrator and run:
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force
-   .\install.ps1 -InstallDir "C:\LabPulse"
+   powershell -File "C:\LabPulse\install.ps1" -InstallDir "C:\LabPulse"
    ```
-5. Update `C:\LabPulse\config.json`:
-   ```json
-   {
-     "machine_id": "CSL1-PC-01",
-     "lab_id": "CS-LAB-1",
-     "api_base_url": "https://cezkm5x4k8.execute-api.ap-south-1.amazonaws.com/v1",
-     "api_key": "<your-machine-api-key>"
-   }
-   ```
-6. On user login, the agent will launch automatically, drain any pending offline records, and prompt for student PNR credentials.
+5. On Windows logon, the agent launches automatically, syncs offline telemetry, and prompts students for their **PNR No.** and password.
 
 ---
 

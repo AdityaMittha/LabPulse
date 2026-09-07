@@ -1,0 +1,239 @@
+================================================================================
+                    LABPULSE - LAB PC AGENT SETUP GUIDE
+                 Walchand Institute of Technology, Solapur
+================================================================================
+
+This document provides simple, step-by-step instructions to set up the 
+LabPulse agent on lab computers, connect them to the AWS cloud dashboard, 
+and configure multiple PCs in a lab.
+
+--------------------------------------------------------------------------------
+PART 1: DASHBOARD PRE-CONFIGURATION (CHANGES TO BE DONE BY ADMIN FIRST)
+--------------------------------------------------------------------------------
+
+Before touching any lab computer, the admin must register the lab and machine 
+details in the LabPulse Dashboard:
+
+  Dashboard URL : http://wit-solapur-labpulse-dashboard-8937.s3-website.ap-south-1.amazonaws.com
+  Local Dev URL : http://localhost:5173
+  Default Login : admin@wit.ac.in  /  Admin@123
+
+STEP 1: ADD DEPARTMENT
+  1. Open Admin -> Departments (/admin/departments).
+  2. Click "+ Add Department".
+  3. Enter:
+       Department Code : e.g., CSE
+       Full Name       : e.g., Computer Science & Engineering
+       Building        : e.g., D Block
+       HOD Name        : e.g., Dr. S. K. Dixit
+  4. Click "Add Department".
+
+STEP 2: ADD COMPUTER LAB
+  1. Open Admin -> Labs (/admin/labs).
+  2. Click "+ Add Lab".
+  3. Enter:
+       Lab ID          : e.g., CS-LAB-1  (NOTE: Remember this ID)
+       Lab Name        : e.g., Computer Center 1
+       Department      : Select CSE
+       Building/Floor  : e.g., D Block, Ground
+       Capacity        : e.g., 40
+  4. Click "Add Lab".
+
+STEP 3: REGISTER LAB PC & GET API KEY
+  1. Open Admin -> Machines (/admin/machines).
+  2. Click "+ Add Machine".
+  3. Enter:
+       Machine ID : e.g., CSL1-PC-01 (or CSL1-PC-02, CSL1-PC-03, etc.)
+       Lab        : Select Computer Center 1 (CS-LAB-1)
+       Hostname   : e.g., CSL1-PC-01
+  4. Click "Register Machine".
+
+  *** CRITICAL NOTE ON API KEY ***:
+  A popup will display your generated Machine API Key (format: lp_...).
+  COPY AND SAVE THIS KEY IMMEDIATELY! 
+  It is shown ONLY ONCE for security. Each lab PC requires its unique API key.
+
+STEP 4: ADD STUDENTS (PNR CREDENTIALS)
+  1. Open Admin -> Students (/admin/students).
+  2. Click "+ Add Student".
+  3. Fill in:
+       Name       : Student full name
+       Student ID : e.g., CS2024001
+       PNR No.    : e.g., 2024WIT001 (Printed on college ID card)
+       Password   : Password student uses to unlock the PC
+       Department : e.g., CSE
+       Year       : e.g., BE
+
+  NOTE: Students unlock lab computers using their PNR No. and Password.
+
+STEP 5: UPLOAD WEEKLY TIMETABLE
+  1. Open Admin -> Timetable (/admin/timetable).
+  2. Click "Import CSV" -> "Download Template" to get the standard CSV format.
+  3. Populate subjects, batches, and class timings, then upload the CSV file.
+
+
+--------------------------------------------------------------------------------
+PART 2: STEP-BY-STEP DOWNLOAD & SETUP OF AGENT ON A LAB PC
+--------------------------------------------------------------------------------
+
+PREREQUISITES ON LAB PC:
+  1. Windows 10 or Windows 11 (64-bit).
+  2. Python 3.10+ installed.
+     IMPORTANT: When installing Python, ensure you check:
+     [x] Add python.exe to PATH
+
+STEP 1: DOWNLOAD AGENT FILES
+  Method A: In the Dashboard, click "Download Agent Pack" in the sidebar 
+            and extract the downloaded labpulse-agent.zip.
+  Method B: Copy the "agent/" folder from the project onto a USB drive.
+
+STEP 2: EXTRACT TO C:\LabPulse
+  1. Open C:\ drive in File Explorer.
+  2. Create a folder named "LabPulse" (so the path is C:\LabPulse).
+  3. Copy all agent files into C:\LabPulse.
+     (Contents: src folder, requirements.txt, install.ps1, config.json)
+
+STEP 3: CONFIGURE config.json
+  Open C:\LabPulse\config.json in Notepad:
+  
+  {
+    "machine_id": "CSL1-PC-01",
+    "lab_id": "CS-LAB-1",
+    "lab_name": "Computer Center 1",
+    "college_name": "Walchand Institute of Technology, Solapur",
+    "api_base_url": "https://cezkm5x4k8.execute-api.ap-south-1.amazonaws.com/v1",
+    "api_key": "PASTE_YOUR_COPIED_API_KEY_HERE",
+    "idle_threshold_seconds": 60,
+    "summary_interval_minutes": 60,
+    "retry_interval_minutes": 5,
+    "max_validate_attempts": 3,
+    "log_level": "INFO"
+  }
+
+  - Update "machine_id" to match the machine (e.g. CSL1-PC-01).
+  - Ensure "lab_id" matches your registered lab (e.g. CS-LAB-1).
+  - Paste your machine's secret "api_key" (lp_...).
+  - Save and close Notepad.
+
+STEP 4: RUN INSTALLER SCRIPT
+  1. Click Start, type "powershell", right-click Windows PowerShell, 
+     and choose "Run as administrator".
+  2. Run the following two commands:
+  
+     Set-ExecutionPolicy Bypass -Scope Process -Force
+     powershell -File "C:\LabPulse\install.ps1" -InstallDir "C:\LabPulse"
+
+  What the installer does automatically:
+  - Sets up the Python virtual environment and installs dependencies.
+  - Registers Scheduled Task "LabPulse" (starts login screen at logon).
+  - Registers Scheduled Task "LabPulse-Shutdown" (syncs cloud data on shutdown).
+
+STEP 5: TEST AND VERIFY
+  1. Log off Windows or restart the PC.
+  2. When Windows signs in, the full-screen LabPulse Student Login window appears.
+  3. Enter student PNR No. and Password, then click "Login to Workstation".
+  4. Desktop unlocks and tracking begins.
+  5. In Dashboard (Labs -> Computer Center 1), the PC turns green ("Active").
+
+
+--------------------------------------------------------------------------------
+PART 3: NOTE FOR MULTIPLE PCs (LAB MASS DEPLOYMENT GUIDE)
+--------------------------------------------------------------------------------
+
+When setting up an entire lab (30 to 60+ computers):
+
+1. BATCH MACHINE REGISTRATION:
+   - In Dashboard (Admin -> Machines), register all machines at once:
+     CSL1-PC-01, CSL1-PC-02, CSL1-PC-03, ... CSL1-PC-40.
+   - Save the list of generated API keys in a text file on your Admin USB drive.
+
+2. FAST USB SETUP PER PC (Takes ~45 seconds per PC):
+   - Place C:\LabPulse on a USB drive.
+   - On each lab computer:
+     a. Copy LabPulse folder to C:\LabPulse.
+     b. Open C:\LabPulse\config.json, update machine_id (e.g. CSL1-PC-02) 
+        and paste its corresponding api_key.
+     c. Run PowerShell as Admin:
+        powershell -File "C:\LabPulse\install.ps1" -InstallDir "C:\LabPulse"
+     d. Done!
+
+3. NOTE FOR DISK CLONING (Clonezilla / FOG / Sysprep):
+   - Install Python and run install.ps1 on the master PC.
+   - Clone the disk image to all PCs in the lab.
+   - After cloning, you only need to open C:\LabPulse\config.json on each PC 
+     and enter its specific machine_id and api_key.
+
+4. NOTE FOR REBOOT-RESTORE SOFTWARE (Deep Freeze / Drive Vaccine):
+   *** CAUTION ***:
+   If your lab uses Deep Freeze, the offline queue (agent_queue.db) and 
+   session state are saved in C:\LabPulse. If C:\ is frozen, offline telemetry 
+   recorded during power cuts will be wiped on reboot!
+   SOLUTION: Place LabPulse on an unfrozen partition/ThawSpace (e.g., D:\LabPulse), 
+   or add C:\LabPulse to the Deep Freeze folder exclusion list.
+
+
+--------------------------------------------------------------------------------
+PART 4: HOW THE AGENT CONNECTS TO CLOUD & DASHBOARD
+--------------------------------------------------------------------------------
+
+1. AUTHENTICATION & LOGIN FLOW:
+   - When PC turns on, Task "LabPulse" checks local SQLite database and flushes 
+     any pending offline telemetry to AWS API Gateway.
+   - Full-screen Tkinter login prompt appears.
+   - Student enters PNR No. and Password.
+   - Agent calls HTTPS POST /agent/validate with header x-api-key: lp_...
+   - AWS Lambda verifies machine key and checks student PNR in DynamoDB (by_pnr GSI).
+   - On valid credentials, backend returns signed session token. Desktop unlocks.
+
+2. ACTIVE SESSION MONITORING:
+   - Agent checks active foreground window process every second.
+   - Tracks mouse/keyboard interaction rates (active vs. idle time).
+   - Inspects browser tab titles and domains via Windows UI Automation.
+   - Summarizes data hourly and sends to HTTPS POST /agent/ingest.
+   - PRIVACY: Never records keystrokes, clipboard, screenshots, or camera.
+
+3. PRE-SHUTDOWN CLOUD SYNC:
+   - When user clicks Shut Down or Restart, Windows fires Event ID 1074.
+   - Task "LabPulse-Shutdown" executes main.py --shutdown-sync.
+   - Current session telemetry and session end timestamp are sent to 
+     HTTPS POST /agent/session-end.
+   - If internet is unavailable, data is saved in C:\LabPulse\agent_queue.db 
+     and uploaded immediately on the next PC turn-on.
+   - Student session is terminated so next user must log in.
+
+
+--------------------------------------------------------------------------------
+PART 5: TROUBLESHOOTING & SUPPORT NOTES
+--------------------------------------------------------------------------------
+
+LOG FILE LOCATION:
+  C:\LabPulse\logs\agent.log
+  To view live logs in PowerShell:
+  Get-Content C:\LabPulse\logs\agent.log -Wait -Tail 30
+
+COMMON ISSUES & FIXES:
+  1. Error "403 Forbidden / Invalid machine API key":
+     The api_key in config.json does not match the key generated in the 
+     dashboard. Re-check the key in Admin -> Machines.
+
+  2. Error "Student not found" on login:
+     Verify the student was added in Admin -> Students with the exact PNR No.
+
+  3. Login window does not appear on Windows logon:
+     Ensure install.ps1 was run with Administrator rights. Check Task Scheduler:
+     schtasks /query /tn LabPulse
+
+  4. Error "python is not recognized as an internal command":
+     Python is not in the system PATH. Reinstall Python and make sure to tick
+     "Add python.exe to PATH".
+
+  5. Firewall blocking connection:
+     Ensure port 443 outbound HTTPS is open to:
+     https://cezkm5x4k8.execute-api.ap-south-1.amazonaws.com
+
+HOW TO UNINSTALL:
+  Open PowerShell as Administrator and run:
+  Unregister-ScheduledTask -TaskName "LabPulse" -Confirm:$false
+  Unregister-ScheduledTask -TaskName "LabPulse-Shutdown" -Confirm:$false
+  Remove-Item -Recurse -Force "C:\LabPulse"
+================================================================================
