@@ -17,6 +17,7 @@ import MachineDetailPage from "./pages/MachineDetailPage";
 import StudentDetailPage from "./pages/StudentDetailPage";
 import CompliancePage from "./pages/CompliancePage";
 import ReportsPage from "./pages/ReportsPage";
+import AdminLabsPage from "./pages/AdminLabsPage";
 import AdminMachinesPage from "./pages/AdminMachinesPage";
 import AdminStudentsPage from "./pages/AdminStudentsPage";
 import AdminTimetablePage from "./pages/AdminTimetablePage";
@@ -28,6 +29,7 @@ const BREADCRUMBS = {
   "/labs":            [{ label: "Overview", to: "/" }, { label: "Labs" }],
   "/compliance":      [{ label: "Overview", to: "/" }, { label: "Compliance" }],
   "/reports":         [{ label: "Overview", to: "/" }, { label: "Reports" }],
+  "/admin/labs":      [{ label: "Admin" }, { label: "Labs" }],
   "/admin/machines":  [{ label: "Admin" }, { label: "Machines" }],
   "/admin/students":  [{ label: "Admin" }, { label: "Students" }],
   "/admin/timetable": [{ label: "Admin" }, { label: "Timetable" }],
@@ -38,9 +40,9 @@ function DepartmentSelector() {
   const [selected, setSelected] = useState("");
 
   const depts = [
-    { code: "CSE", name: "Computer Science & Engineering", desc: "CS Lab 1, CS Lab 2" },
-    { code: "IT", name: "Information Technology", desc: "IT Lab" },
-    { code: "E&TC", name: "Electronics & Telecommunication", desc: "E&TC Lab" },
+    { code: "CSE", name: "Computer Science & Engineering", desc: "Department labs & computing centers" },
+    { code: "IT", name: "Information Technology", desc: "Information technology & network labs" },
+    { code: "E&TC", name: "Electronics & Telecommunication", desc: "Electronics & hardware labs" },
   ];
 
   return (
@@ -128,6 +130,7 @@ function ProtectedLayout({ requireAdmin = false }) {
             <Route path="/compliance" element={<CompliancePage globalDate={globalDate} />} />
             <Route path="/reports" element={<ReportsPage />} />
             {isAdmin && <>
+              <Route path="/admin/labs"      element={<AdminLabsPage />} />
               <Route path="/admin/machines"  element={<AdminMachinesPage />} />
               <Route path="/admin/students"  element={<AdminStudentsPage />} />
               <Route path="/admin/timetable" element={<AdminTimetablePage />} />

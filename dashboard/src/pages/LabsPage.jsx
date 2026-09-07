@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FlaskConical, Cpu, Users, TrendingUp } from "lucide-react";
+import { FlaskConical, Cpu, Users, TrendingUp, Plus } from "lucide-react";
 import { todayStr } from "../data/mockData";
 import { StatCard, UtilBar, PageWrapper, SectionHeading } from "../components/Shared";
 import { fetchUsage, fetchMachines, fetchLabs } from "../api/apiClient";
@@ -103,9 +103,14 @@ export default function LabsPage({ globalDate }) {
     <PageWrapper>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Labs {isAdmin ? "" : `— ${user.department}`}</h1>
-          <p className="page-subtitle">{isAdmin ? "All computer labs" : `${user.department} computer labs`} · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</p>
+          <h1 className="page-title">Labs {isAdmin ? "" : `— ${user?.department || ""}`}</h1>
+          <p className="page-subtitle">{isAdmin ? "All computer labs" : `${user?.department || ""} computer labs`} · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</p>
         </div>
+        {isAdmin && (
+          <Link to="/admin/labs" className="btn-primary btn-sm inline-flex items-center gap-1.5">
+            <Plus size={14} /> Add Lab
+          </Link>
+        )}
       </div>
 
       {/* Summary stats */}
@@ -117,9 +122,22 @@ export default function LabsPage({ globalDate }) {
 
       {/* Lab grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {labStats.length === 0
-          ? <p className="text-slate-400 text-sm col-span-full text-center py-12">No labs found. Make sure labs are registered in the backend.</p>
-          : labStats.map(lab => (
+        {labStats.length === 0 ? (
+          <div className="card card-body text-center py-16 col-span-full">
+            <FlaskConical size={32} className="mx-auto text-slate-300 mb-2" />
+            <h3 className="text-base font-semibold text-slate-700">No labs registered yet</h3>
+            <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">
+              There are no computer labs in the database. Use the Admin Labs page to configure your college labs.
+            </p>
+            {isAdmin && (
+              <div className="mt-4">
+                <Link to="/admin/labs" className="btn-primary btn-sm inline-flex items-center gap-1.5">
+                  <Plus size={14} /> Add Lab
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : labStats.map(lab => (
             <Link key={lab.lab_id} to={`/labs/${lab.lab_id}`}
               className="card hover:bg-slate-50/50 transition-all group block">
               {/* Card header */}

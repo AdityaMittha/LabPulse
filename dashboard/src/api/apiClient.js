@@ -38,23 +38,24 @@ async function apiFetch(path, options = {}) {
 
 // ── Labs ────────────────────────────────────────────────────────────────────
 
-const DEFAULT_LABS = [
-  { lab_id: "CS-LAB-1", name: "CS Lab 1", building: "D Block", floor: "Ground", capacity: 40, department: "CSE" },
-  { lab_id: "CS-LAB-2", name: "CS Lab 2", building: "D Block", floor: "First",  capacity: 30, department: "CSE/IT" },
-  { lab_id: "IT-LAB",   name: "IT Lab",   building: "C Block", floor: "Ground", capacity: 35, department: "IT" },
-  { lab_id: "ETC-LAB",  name: "E&TC Lab", building: "B Block", floor: "Second", capacity: 25, department: "E&TC" },
-];
-
 export async function fetchLabs() {
-  try {
-    const data = await apiFetch("/admin/labs");
-    if (data && Array.isArray(data.labs) && data.labs.length > 0) {
-      return data.labs;
-    }
-  } catch (err) {
-    console.warn("Could not fetch /admin/labs, using default institution labs.", err);
-  }
-  return DEFAULT_LABS;
+  const data = await apiFetch("/admin/labs");
+  return data.labs || [];
+}
+
+export async function addLab({ lab_id, name, building, floor, department, capacity }) {
+  const data = await apiFetch("/admin/labs", {
+    method: "POST",
+    body: JSON.stringify({ lab_id, name, building, floor, department, capacity }),
+  });
+  return data;
+}
+
+export async function deleteLab(labId) {
+  const data = await apiFetch(`/admin/labs?lab_id=${encodeURIComponent(labId)}`, {
+    method: "DELETE",
+  });
+  return data;
 }
 
 // ── Machines ─────────────────────────────────────────────────────────────────

@@ -404,10 +404,20 @@ export default function AdminMachinesPage() {
               </div>
               <div>
                 <label className="form-label">Lab</label>
-                <select className="form-select" value={form.lab_id}
-                  onChange={e => setForm(f => ({ ...f, lab_id: e.target.value }))}>
-                  {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
-                </select>
+                {labs.length === 0 ? (
+                  <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                    No computer labs exist yet. Please{" "}
+                    <Link to="/admin/labs" className="underline font-semibold text-primary-600 hover:text-primary-700">
+                      create a lab
+                    </Link>{" "}
+                    first before registering machines.
+                  </div>
+                ) : (
+                  <select className="form-select" value={form.lab_id}
+                    onChange={e => setForm(f => ({ ...f, lab_id: e.target.value }))}>
+                    {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name} ({l.lab_id})</option>)}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="form-label">Windows Hostname</label>
@@ -417,7 +427,7 @@ export default function AdminMachinesPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button className="btn-secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.machine_id || !form.hostname || submitting}>
+              <button className="btn-primary" onClick={handleAdd} disabled={!form.machine_id || !form.hostname || !form.lab_id || submitting}>
                 {submitting ? "Registering…" : "Register & Generate Key"}
               </button>
             </div>

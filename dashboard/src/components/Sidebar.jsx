@@ -16,6 +16,7 @@ const navItems = [
 ];
 
 const adminItems = [
+  { to: "/admin/labs",      label: "Labs",      icon: FlaskConical },
   { to: "/admin/machines",  label: "Machines",  icon: Cpu },
   { to: "/admin/students",  label: "Students",  icon: Users },
   { to: "/admin/timetable", label: "Timetable", icon: BookOpen },

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PageWrapper } from "../components/Shared";
 import { fetchLabs, fetchTimetable, addTimetableSlot, deleteTimetableSlot } from "../api/apiClient";
 
@@ -182,9 +183,19 @@ export default function AdminTimetablePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="form-label">Lab</label>
-                <select className="form-select" value={form.lab_id} onChange={e => setForm(f=>({...f,lab_id:e.target.value}))}>
-                  {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name}</option>)}
-                </select>
+                {labs.length === 0 ? (
+                  <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 col-span-2">
+                    No computer labs exist yet. Please{" "}
+                    <Link to="/admin/labs" className="underline font-semibold text-primary-600 hover:text-primary-700">
+                      create a lab
+                    </Link>{" "}
+                    first.
+                  </div>
+                ) : (
+                  <select className="form-select" value={form.lab_id} onChange={e => setForm(f=>({...f,lab_id:e.target.value}))}>
+                    {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name} ({l.lab_id})</option>)}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="form-label">Day</label>
@@ -219,7 +230,7 @@ export default function AdminTimetablePage() {
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button className="btn-secondary" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.course_code || !form.faculty_name || submitting}>
+              <button className="btn-primary" onClick={handleAdd} disabled={!form.lab_id || !form.course_code || !form.faculty_name || submitting}>
                 {submitting ? "Adding…" : "Add Slot"}
               </button>
             </div>
