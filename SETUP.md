@@ -76,24 +76,39 @@ Before configuring any lab PC, the administrator must register the lab and machi
 
 ---
 
-### Step 1: Download Agent Files
-Choose either method:
-- **Method A**: Log into the Dashboard on the lab PC and click **Download Agent Pack** in the sidebar. Extract the downloaded `labpulse-agent.zip`.
-- **Method B**: Copy the `agent/` folder from the project onto a USB flash drive and plug it into the lab PC.
+### Method 1: Automated USB Pen Drive & GitHub Setup (`setup.bat`) — Recommended
+
+This method allows setting up any lab PC in **under 30 seconds**:
+
+1. **Prepare your USB Pen Drive**:
+   Copy two files to your USB drive root:
+   - [`setup.bat`](setup.bat)
+   - `api_keys.txt` containing your registered machine IDs and API keys (see `api_keys.sample.txt`):
+     ```text
+     CSL1-PC-01,lp_oSbz206JnrsshznYuM-byN-RNMIrPDGg
+     CSL1-PC-02,lp_0lMD0l7HCoKkVOWjBMWRNG1z8IkRwY7X
+     CSL1-PC-03,lp_jufQh3kqBLkSSc5liwmHFBhJn7m-SB97
+     ```
+2. **Plug USB Drive into the Lab PC**.
+3. **Right-click `setup.bat`** on the USB drive and choose **"Run as administrator"**.
+4. **Follow the On-Screen Prompts**:
+   - The script prompts for the Machine ID (defaults to the computer's Windows hostname).
+   - It automatically searches the USB drive for `api_keys.txt` (or `keys.csv` / `machine_api_keys.json`) and **extracts the API key for that machine automatically**.
+   - It **downloads the latest agent package directly from GitHub** (`AdityaMittha/LabPulse`).
+   - It creates `C:\LabPulse`, writes the configuration, sets up dependencies, and registers Windows Scheduled Tasks.
+   - It tests the AWS API connection and confirms: `[SUCCESS] Cloud API Gateway reached successfully!`.
 
 ---
 
-### Step 2: Place in Install Directory
-1. Open `C:\` on the lab PC.
-2. Create a folder named `C:\LabPulse`.
-3. Copy all files from the downloaded agent folder into `C:\LabPulse`.  
-   *(Your folder should contain: `src/`, `config.json` or `config.json.example`, `requirements.txt`, `install.ps1`)*
+### Method 2: Manual Download & Installation
 
----
+If you prefer to install manually without the automated batch file:
 
-### Step 3: Configure `config.json`
-Open `C:\LabPulse\config.json` in Notepad (or copy and rename `config.json.example` to `config.json`):
+#### Step 1: Download Agent Files
+- Click **Download Agent Pack** in the dashboard sidebar to get `labpulse-agent.zip`, or copy the `agent/` folder from the project to `C:\LabPulse`.
 
+#### Step 2: Configure `C:\LabPulse\config.json`
+Open `C:\LabPulse\config.json` in Notepad:
 ```json
 {
   "machine_id": "CSL1-PC-01",
@@ -110,22 +125,12 @@ Open `C:\LabPulse\config.json` in Notepad (or copy and rename `config.json.examp
 }
 ```
 
-- Set `"machine_id"` to this PC's identifier (e.g. `CSL1-PC-01`).
-- Set `"lab_id"` to the registered lab ID (e.g. `CS-LAB-1`).
-- Paste the secret `"api_key"` generated in Part 1, Step 3.
-- Save and close the file.
-
----
-
-### Step 4: Run the Installer Script
-1. Click the Windows Start menu, type `powershell`.
-2. Right-click **Windows PowerShell** and choose **"Run as administrator"**.
-3. Run the following command:
-
+#### Step 3: Run PowerShell Installer
+Open PowerShell as Administrator:
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
 cd C:\LabPulse
-.\install.ps1 -InstallDir "C:\LabPulse"
+powershell -File ".\install.ps1" -InstallDir "C:\LabPulse"
 ```
 
 What the installer does automatically:

@@ -37,7 +37,11 @@ export default function AdminStudentsPage() {
     setError(null);
     Promise.all([fetchStudents(), fetchDepartments().catch(() => [])])
       .then(([studentsData, deptsData]) => {
-        setStudents(studentsData);
+        const normalized = (studentsData || []).map(s => {
+          const id = s.student_id || s.pnr_no || "";
+          return { ...s, student_id: id, pnr_no: id };
+        });
+        setStudents(normalized);
         setDepartments(deptsData);
         if (deptsData.length > 0) {
           setForm(f => ({ ...f, department: deptsData[0].department_id || deptsData[0].code }));
@@ -58,10 +62,12 @@ export default function AdminStudentsPage() {
   }, [departments, students]);
 
   const [expandedDepts, setExpandedDepts] = useState(() => new Set());
+  const [expandedYears, setExpandedYears] = useState(() => new Set());
 
   useEffect(() => {
     if (deptList.length > 0) {
       setExpandedDepts(new Set(deptList));
+      setExpandedYears(new Set(deptList.flatMap(d => YEARS.map(y => `${d}-${y}`))));
     }
   }, [deptList]);
 
@@ -114,11 +120,19 @@ export default function AdminStudentsPage() {
   }, [students, deptList]);
 
   const handleAdd = async () => {
-    if (!form.name || !form.student_id) return;
+    const idVal = (form.student_id || form.pnr_no || "").trim();
+    const nameVal = form.name.trim();
+    const passVal = form.password.trim();
+    const emailVal = form.college_login.trim();
+    if (!nameVal || !idVal || !passVal || !emailVal) {
+      alert("Please enter Name, PNR No., Password, and Email (all are compulsory).");
+      return;
+    }
     setSubmitting(true);
     try {
-      await addStudent({ ...form });
-      setStudents(prev => [...prev, { ...form, role: "student" }]);
+      const newStudent = { ...form, student_id: idVal, pnr_no: idVal, role: "student" };
+      await addStudent(newStudent);
+      setStudents(prev => [...prev, newStudent]);
       setShowAdd(false);
       setForm({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
     } catch (err) {
@@ -294,8 +308,7 @@ export default function AdminStudentsPage() {
                               <thead>
                                 <tr>
                                   <th className="!text-[10px] !py-2">Name</th>
-                                  <th className="!text-[10px] !py-2">Student ID</th>
-                                  <th className="!text-[10px] !py-2">PNR No.</th>
+                                  <th className="!text-[10px] !py-2">Student ID / PNR No.</th>
                                   <th className="!text-[10px] !py-2">Email</th>
                                   <th className="!text-[10px] !py-2 text-right">Actions</th>
                                 </tr>
@@ -308,8 +321,7 @@ export default function AdminStudentsPage() {
                                         {s.name}
                                       </Link>
                                     </td>
-                                    <td className="font-mono text-xs text-slate-500">{s.student_id}</td>
-                                    <td className="font-mono text-xs font-semibold text-slate-700">{s.pnr_no || "—"}</td>
+                                    <td className="font-mono text-xs font-semibold text-slate-700">{s.student_id || s.pnr_no}</td>
                                     <td className="text-xs text-slate-400">{s.college_login}</td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
@@ -355,27 +367,42 @@ export default function AdminStudentsPage() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">Add Student</h2>
             <div className="space-y-3">
               {[
-                ["Name", "name", "text", "Full name"],
-                ["Student ID", "student_id", "text", "e.g. CS2024001"],
-                ["PNR No.", "pnr_no", "text", "e.g. 2024WIT001 (used for PC login)"],
-                ["Password", "password", "password", "Password for PC login (optional)"],
-                ["Email", "college_login", "email", "name@college.ac.in"],
-              ].map(([label, key, type, placeholder]) => (
+                ["Name", "name", "text", "Full name", true],
+                ["Student ID / PNR No.", "student_id", "text", "e.g. 2024WIT001 (used for ID & PC login)", true],
+                ["Password", "password", "password", "Password for PC login (compulsory)", true],
+                ["Email", "college_login", "email", "name@college.ac.in", true],
+              ].map(([label, key, type, placeholder, compulsory]) => (
                 <div key={key}>
-                  <label className="form-label">{label}</label>
-                  <input type={type} className="form-input" placeholder={placeholder}
-                    value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                  <label className="form-label">
+                    {label}
+                    {compulsory && <span className="text-red-500 ml-1 font-bold">*</span>}
+                  </label>
+                  <input
+                    type={type}
+                    className="form-input"
+                    placeholder={placeholder}
+                    required={compulsory}
+                    value={form[key]}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (key === "student_id") {
+                        setForm(f => ({ ...f, student_id: val, pnr_no: val }));
+                      } else {
+                        setForm(f => ({ ...f, [key]: val }));
+                      }
+                    }}
+                  />
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">Department</label>
+                  <label className="form-label">Department <span className="text-red-500 font-bold">*</span></label>
                   <select className="form-select" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
                     {deptList.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="form-label">Year</label>
+                  <label className="form-label">Year <span className="text-red-500 font-bold">*</span></label>
                   <select className="form-select" value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))}>
                     {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
@@ -384,7 +411,11 @@ export default function AdminStudentsPage() {
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button className="btn-secondary" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.name || !form.student_id || submitting}>
+              <button
+                className="btn-primary"
+                onClick={handleAdd}
+                disabled={!form.name.trim() || !form.student_id.trim() || !form.password.trim() || !form.college_login.trim() || submitting}
+              >
                 {submitting ? "Adding…" : "Add Student"}
               </button>
             </div>

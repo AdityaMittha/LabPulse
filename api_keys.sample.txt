@@ -1,0 +1,9 @@
+# LabPulse USB Pen Drive API Keys File
+# Place this file as "api_keys.txt" on the root of your USB flash drive alongside setup.bat.
+# Format: MACHINE_ID,API_KEY (or JSON format in machine_api_keys.json)
+
+CSL1-PC-01,lp_oSbz206JnrsshznYuM-byN-RNMIrPDGg
+CSL1-PC-02,lp_0lMD0l7HCoKkVOWjBMWRNG1z8IkRwY7X
+CSL1-PC-03,lp_jufQh3kqBLkSSc5liwmHFBhJn7m-SB97
+CSL1-PC-04,lp_m-FBQ3OHXYROVZYs4l-6N3pZcq7Wl9Wv
+CSL1-PC-05,lp_7rhDzqf6POvgObrfCtqBWWTiZJYqkMaP

@@ -123,6 +123,11 @@ def lambda_handler(event, context):
         items = resp.get("Items", [])
         if items:
             student = items[0]
+        else:
+            # student_id and pnr_no are identical — check primary key directly
+            direct = users_table.get_item(Key={"student_id": pnr_no}).get("Item")
+            if direct:
+                student = direct
 
     if student is None and college_login:
         resp  = users_table.query(

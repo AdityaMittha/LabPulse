@@ -97,7 +97,10 @@ export default function AdminMachinesPage() {
   }, [machines, labs]);
 
   const handleAdd = async () => {
-    if (!form.machine_id || !form.hostname || !form.lab_id) return;
+    if (!form.machine_id.trim() || !form.hostname.trim() || !form.lab_id.trim()) {
+      alert("Please fill in all compulsory fields: Machine ID, Lab, and Windows Hostname.");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await addMachine(form);
@@ -398,12 +401,12 @@ export default function AdminMachinesPage() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">Register New Machine</h2>
             <div className="space-y-4">
               <div>
-                <label className="form-label">Machine ID</label>
-                <input className="form-input" placeholder="e.g. CSL1-PC-11" value={form.machine_id}
-                  onChange={e => setForm(f => ({ ...f, machine_id: e.target.value }))} />
+                <label className="form-label">Machine ID <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input className="form-input font-mono uppercase" placeholder="e.g. CSL1-PC-11" value={form.machine_id}
+                  onChange={e => setForm(f => ({ ...f, machine_id: e.target.value.toUpperCase() }))} />
               </div>
               <div>
-                <label className="form-label">Lab</label>
+                <label className="form-label">Lab <span className="text-red-500 font-bold ml-1">*</span></label>
                 {labs.length === 0 ? (
                   <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
                     No computer labs exist yet. Please{" "}
@@ -420,14 +423,18 @@ export default function AdminMachinesPage() {
                 )}
               </div>
               <div>
-                <label className="form-label">Windows Hostname</label>
-                <input className="form-input" placeholder="e.g. WIT-CSL1-11" value={form.hostname}
+                <label className="form-label">Windows Hostname <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input className="form-input font-mono" placeholder="e.g. WIT-CSL1-11" value={form.hostname}
                   onChange={e => setForm(f => ({ ...f, hostname: e.target.value }))} />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button className="btn-secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.machine_id || !form.hostname || !form.lab_id || submitting}>
+              <button
+                className="btn-primary"
+                onClick={handleAdd}
+                disabled={!form.machine_id.trim() || !form.hostname.trim() || !form.lab_id.trim() || submitting}
+              >
                 {submitting ? "Registering…" : "Register & Generate Key"}
               </button>
             </div>

@@ -115,7 +115,7 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
     form = tk.Frame(root, bg="#F8FAFC", padx=32, pady=18)
     form.pack(fill="both", expand=True)
 
-    tk.Label(form, text="PNR No.",
+    tk.Label(form, text="Student ID / PNR No.",
              bg="#F8FAFC", fg="#0F172A",
              font=("Segoe UI", 9, "bold"), anchor="w").grid(row=0, column=0, sticky="w")
     pnr_var   = tk.StringVar()

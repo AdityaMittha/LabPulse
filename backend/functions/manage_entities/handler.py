@@ -207,38 +207,44 @@ def _handle_students(method, body, event):
     qs = event.get("queryStringParameters") or {}
     if method == "GET":
         resp = students_table.scan()
-        return _cors({"students": resp.get("Items", [])})
+        items = resp.get("Items", [])
+        for it in items:
+            val = it.get("student_id") or it.get("pnr_no") or ""
+            if val:
+                it["student_id"] = val
+                it["pnr_no"] = val
+        return _cors({"students": items})
 
     if method == "POST":
-        student_id    = body.get("student_id")
-        name          = body.get("name")
-        college_login = body.get("college_login")
-        pnr_no        = body.get("pnr_no", "").strip()
-        password      = body.get("password", "").strip()
+        student_id    = (body.get("student_id") or body.get("pnr_no") or "").strip()
+        pnr_no        = student_id
+        name          = (body.get("name") or "").strip()
+        college_login = (body.get("college_login") or "").strip()
+        password      = (body.get("password") or "").strip()
 
-        if not all([student_id, name, college_login]):
-            return _cors({"error": "student_id, name, college_login required"}, 400)
+        if not student_id:
+            return _cors({"error": "PNR No. (Student ID) is compulsory"}, 400)
+        if not password:
+            return _cors({"error": "Password is compulsory for PC login"}, 400)
+        if not name:
+            return _cors({"error": "Student name is compulsory"}, 400)
+        if not college_login:
+            return _cors({"error": "Email is compulsory"}, 400)
 
         item = {
             "student_id":    student_id,
+            "pnr_no":        student_id,  # student_id and pnr_no are identical
             "name":          name,
             "department":    body.get("department", ""),
             "year":          body.get("year", ""),
             "college_login": college_login,
             "role":          "student",
+            "password_hash": "sha256:" + hashlib.sha256(password.encode()).hexdigest(),
             "created_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
 
-        # PNR number (unique enrollment ID printed on college ID card)
-        if pnr_no:
-            item["pnr_no"] = pnr_no
-
-        # Store SHA-256 password hash — NEVER the plaintext password
-        if password:
-            item["password_hash"] = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
-
         students_table.put_item(Item=item)
-        return _cors({"student_id": student_id, "status": "created"}, 201)
+        return _cors({"student_id": student_id, "pnr_no": student_id, "status": "created"}, 201)
 
     if method == "DELETE":
         student_id = qs.get("student_id") or body.get("student_id")
@@ -266,17 +272,29 @@ def _handle_timetable(method, body, event):
         return _cors({"slots": resp.get("Items", [])})
 
     if method == "POST":
-        slot_id = f"{body.get('lab_id')}#{body.get('day_of_week')}#{body.get('start_time')}"
+        lab_id        = (body.get("lab_id") or "").strip()
+        day_of_week   = (body.get("day_of_week") or "").strip()
+        start_time    = (body.get("start_time") or "").strip()
+        end_time      = (body.get("end_time") or "").strip()
+        course_code   = (body.get("course_code") or "").strip()
+        faculty_name  = (body.get("faculty_name") or "").strip()
+        student_group = (body.get("student_group") or "").strip()
+        expected_count = int(body.get("expected_count") or 25)
+
+        if not all([lab_id, day_of_week, start_time, end_time, course_code, faculty_name, student_group]):
+            return _cors({"error": "All timetable slot fields (lab_id, day_of_week, start_time, end_time, course_code, faculty_name, student_group) are compulsory"}, 400)
+
+        slot_id = f"{lab_id}#{day_of_week}#{start_time}"
         timetable_table.put_item(Item={
             "slot_id":       slot_id,
-            "lab_id":        body.get("lab_id"),
-            "day_of_week":   body.get("day_of_week"),
-            "start_time":    body.get("start_time"),
-            "end_time":      body.get("end_time"),
-            "course_code":   body.get("course_code"),
-            "faculty_name":  body.get("faculty_name"),
-            "student_group": body.get("student_group"),
-            "expected_count": int(body.get("expected_count", 25)),
+            "lab_id":        lab_id,
+            "day_of_week":   day_of_week,
+            "start_time":    start_time,
+            "end_time":      end_time,
+            "course_code":   course_code,
+            "faculty_name":  faculty_name,
+            "student_group": student_group,
+            "expected_count": expected_count,
         })
         return _cors({"slot_id": slot_id, "status": "created"}, 201)
 
@@ -297,17 +315,23 @@ def _handle_labs(method, body, event):
         return _cors({"labs": resp.get("Items", [])})
 
     if method == "POST":
-        lab_id = body.get("lab_id")
-        name   = body.get("name")
-        if not lab_id or not name:
-            return _cors({"error": "lab_id and name required"}, 400)
+        lab_id     = (body.get("lab_id") or "").strip().upper()
+        name       = (body.get("name") or "").strip()
+        department = (body.get("department") or "").strip()
+        building   = (body.get("building") or "").strip()
+        floor      = (body.get("floor") or "").strip()
+        capacity   = int(body.get("capacity") or 30)
+
+        if not lab_id or not name or not department:
+            return _cors({"error": "lab_id, name, and department are compulsory"}, 400)
+
         labs_table.put_item(Item={
             "lab_id":     lab_id,
             "name":       name,
-            "building":   body.get("building", ""),
-            "floor":      body.get("floor", ""),
-            "department": body.get("department", ""),
-            "capacity":   int(body.get("capacity", 30)),
+            "building":   building,
+            "floor":      floor,
+            "department": department,
+            "capacity":   capacity,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         })
         return _cors({"lab_id": lab_id, "status": "created"}, 201)

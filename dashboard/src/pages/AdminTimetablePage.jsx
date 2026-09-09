@@ -82,7 +82,18 @@ export default function AdminTimetablePage() {
   }, [filtered]);
 
   const handleAdd = async () => {
-    if (!form.course_code || !form.faculty_name) return;
+    if (
+      !form.lab_id ||
+      !form.day_of_week ||
+      !form.start_time ||
+      !form.end_time ||
+      !form.course_code.trim() ||
+      !form.faculty_name.trim() ||
+      !form.student_group.trim()
+    ) {
+      alert("Please fill in all compulsory fields: Lab, Day, Start/End Time, Course Code, Faculty, and Student Group.");
+      return;
+    }
     setSubmitting(true);
     try {
       const slotPayload = {
@@ -467,7 +478,7 @@ export default function AdminTimetablePage() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">Add Timetable Slot</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="form-label">Lab</label>
+                <label className="form-label">Lab <span className="text-red-500 font-bold ml-1">*</span></label>
                 {labs.length === 0 ? (
                   <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 col-span-2">
                     No computer labs exist yet. Please create a lab first.
@@ -479,39 +490,52 @@ export default function AdminTimetablePage() {
                 )}
               </div>
               <div>
-                <label className="form-label">Day of Week</label>
+                <label className="form-label">Day of Week <span className="text-red-500 font-bold ml-1">*</span></label>
                 <select className="form-select" value={form.day_of_week} onChange={e => setForm(f=>({...f,day_of_week:e.target.value}))}>
                   {DAYS.map(d => <option key={d}>{d}</option>)}
                 </select>
               </div>
               <div>
-                <label className="form-label">Start Time</label>
+                <label className="form-label">Start Time <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input type="time" className="form-input" value={form.start_time} onChange={e => setForm(f=>({...f,start_time:e.target.value}))} />
               </div>
               <div>
-                <label className="form-label">End Time</label>
+                <label className="form-label">End Time <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input type="time" className="form-input" value={form.end_time} onChange={e => setForm(f=>({...f,end_time:e.target.value}))} />
               </div>
               <div>
-                <label className="form-label">Course Code / Subject</label>
+                <label className="form-label">Course Code / Subject <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input className="form-input" placeholder="e.g. CS301-DS Lab" value={form.course_code} onChange={e => setForm(f=>({...f,course_code:e.target.value}))} />
               </div>
               <div>
-                <label className="form-label">Faculty Name</label>
+                <label className="form-label">Faculty Name <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input className="form-input" placeholder="e.g. Dr. S. K. Sharma" value={form.faculty_name} onChange={e => setForm(f=>({...f,faculty_name:e.target.value}))} />
               </div>
               <div>
-                <label className="form-label">Student Group / Batch</label>
+                <label className="form-label">Student Group / Batch <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input className="form-input" placeholder="e.g. CSE-B1" value={form.student_group} onChange={e => setForm(f=>({...f,student_group:e.target.value}))} />
               </div>
               <div>
-                <label className="form-label">Expected Students Count</label>
-                <input type="number" className="form-input" value={form.expected_count} onChange={e => setForm(f=>({...f,expected_count:e.target.value}))} />
+                <label className="form-label">Expected Students Count <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input type="number" min="1" className="form-input" value={form.expected_count} onChange={e => setForm(f=>({...f,expected_count:e.target.value}))} />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5 pt-3 border-t border-slate-100">
               <button className="btn-secondary" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</button>
-              <button className="btn-primary" onClick={handleAdd} disabled={!form.lab_id || !form.course_code || !form.faculty_name || submitting}>
+              <button
+                className="btn-primary"
+                onClick={handleAdd}
+                disabled={
+                  !form.lab_id ||
+                  !form.day_of_week ||
+                  !form.start_time ||
+                  !form.end_time ||
+                  !form.course_code.trim() ||
+                  !form.faculty_name.trim() ||
+                  !form.student_group.trim() ||
+                  submitting
+                }
+              >
                 {submitting ? "Adding…" : "Add Slot"}
               </button>
             </div>

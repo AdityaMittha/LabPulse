@@ -47,19 +47,28 @@ export default function AdminLabsPage() {
   }, []);
 
   const handleAdd = async () => {
-    if (!form.lab_id.trim() || !form.name.trim()) return;
+    if (!form.lab_id.trim() || !form.name.trim() || !form.department.trim() || !form.building.trim() || !form.floor.trim()) {
+      alert("Please fill in all compulsory fields: Lab ID, Lab Name, Department, Building, and Floor.");
+      return;
+    }
     setSubmitting(true);
     try {
       await addLab({
         ...form,
         lab_id: form.lab_id.trim().toUpperCase(),
         name: form.name.trim(),
+        department: form.department.trim(),
+        building: form.building.trim(),
+        floor: form.floor.trim(),
         capacity: Number(form.capacity) || 30,
       });
       setLabs(prev => [...prev, {
         ...form,
         lab_id: form.lab_id.trim().toUpperCase(),
         name: form.name.trim(),
+        department: form.department.trim(),
+        building: form.building.trim(),
+        floor: form.floor.trim(),
         capacity: Number(form.capacity) || 30,
       }]);
       setShowAdd(false);
@@ -272,7 +281,7 @@ export default function AdminLabsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="form-label mb-0">Department</label>
+                    <label className="form-label mb-0">Department <span className="text-red-500 font-bold">*</span></label>
                     <Link to="/admin/departments" className="text-[11px] text-primary-600 hover:underline">
                       Manage Depts
                     </Link>
@@ -299,7 +308,7 @@ export default function AdminLabsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="form-label">Capacity (Seats)</label>
+                  <label className="form-label">Capacity (Seats) <span className="text-red-500 font-bold">*</span></label>
                   <input
                     type="number"
                     className="form-input"
@@ -314,7 +323,7 @@ export default function AdminLabsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">Building</label>
+                  <label className="form-label">Building <span className="text-red-500 font-bold">*</span></label>
                   <input
                     type="text"
                     className="form-input"
@@ -324,7 +333,7 @@ export default function AdminLabsPage() {
                   />
                 </div>
                 <div>
-                  <label className="form-label">Floor</label>
+                  <label className="form-label">Floor <span className="text-red-500 font-bold">*</span></label>
                   <input
                     type="text"
                     className="form-input"
@@ -347,7 +356,7 @@ export default function AdminLabsPage() {
               <button
                 className="btn-primary"
                 onClick={handleAdd}
-                disabled={!form.lab_id.trim() || !form.name.trim() || submitting}
+                disabled={!form.lab_id.trim() || !form.name.trim() || !form.department.trim() || !form.building.trim() || !form.floor.trim() || submitting}
               >
                 {submitting ? "Adding…" : "Add Lab"}
               </button>

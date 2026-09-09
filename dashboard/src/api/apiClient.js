@@ -25,8 +25,8 @@ async function apiFetch(path, options = {}) {
     if (resp.status === 401) {
       sessionStorage.removeItem("labpulse_token");
       sessionStorage.removeItem("labpulse_user");
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+      if (!window.location.hash.includes("/login")) {
+        window.location.hash = "#/login";
       }
       throw new Error("Session expired. Please log in again.");
     }
@@ -109,13 +109,26 @@ export async function deleteMachine(machineId) {
 
 export async function fetchStudents() {
   const data = await apiFetch("/admin/students");
-  return data.students || [];
+  const list = data.students || [];
+  return list.map(s => {
+    const id = s.student_id || s.pnr_no || "";
+    return { ...s, student_id: id, pnr_no: id };
+  });
 }
 
 export async function addStudent({ student_id, name, college_login, pnr_no, password, department, year }) {
+  const finalId = (student_id || pnr_no || "").trim();
   const data = await apiFetch("/admin/students", {
     method: "POST",
-    body: JSON.stringify({ student_id, name, college_login, pnr_no, password, department, year }),
+    body: JSON.stringify({
+      student_id: finalId,
+      pnr_no: finalId,
+      name,
+      college_login,
+      password,
+      department,
+      year,
+    }),
   });
   return data;
 }

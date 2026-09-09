@@ -398,36 +398,96 @@ Resources:
         - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
         - DynamoDBReadPolicy: { TableName: !Ref HourlyReportsTable }
       Events:
-        Machines:
+        MachinesGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/machines
-            Method: ANY
-        Students:
+            Method: GET
+        MachinesPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/machines
+            Method: POST
+        MachinesDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/machines
+            Method: DELETE
+        StudentsGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/students
-            Method: ANY
-        Timetable:
+            Method: GET
+        StudentsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/students
+            Method: POST
+        StudentsDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/students
+            Method: DELETE
+        TimetableGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/timetable
-            Method: ANY
-        Labs:
+            Method: GET
+        TimetablePost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/timetable
+            Method: POST
+        TimetableDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/timetable
+            Method: DELETE
+        LabsGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/labs
-            Method: ANY
-        Departments:
+            Method: GET
+        LabsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/labs
+            Method: POST
+        LabsDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/labs
+            Method: DELETE
+        DepartmentsGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
             Path: /admin/departments
-            Method: ANY
+            Method: GET
+        DepartmentsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/departments
+            Method: POST
+        DepartmentsDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/departments
+            Method: DELETE
 
 # â”€â”€ Outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

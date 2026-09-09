@@ -340,7 +340,7 @@ export default function AdminDepartmentsPage() {
 
             <form onSubmit={handleAdd} className="space-y-4">
               <div>
-                <label className="form-label">Department Code / ID *</label>
+                <label className="form-label">Department Code / ID <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input
                   type="text"
                   required
@@ -353,7 +353,7 @@ export default function AdminDepartmentsPage() {
               </div>
 
               <div>
-                <label className="form-label">Department Full Name *</label>
+                <label className="form-label">Department Full Name <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input
                   type="text"
                   required

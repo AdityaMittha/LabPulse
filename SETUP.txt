@@ -82,6 +82,35 @@ PREREQUISITES ON LAB PC:
      IMPORTANT: When installing Python, ensure you check:
      [x] Add python.exe to PATH
 
+================================================================================
+METHOD 1: AUTOMATED USB PEN DRIVE & GITHUB SETUP (setup.bat) - RECOMMENDED
+================================================================================
+This method configures each computer in under 30 seconds:
+
+1. PREPARE YOUR USB PEN DRIVE:
+   Place two files on the root of your USB drive:
+   a. setup.bat
+   b. api_keys.txt (with machine IDs and keys, see api_keys.sample.txt):
+        CSL1-PC-01,lp_oSbz206JnrsshznYuM-byN-RNMIrPDGg
+        CSL1-PC-02,lp_0lMD0l7HCoKkVOWjBMWRNG1z8IkRwY7X
+        CSL1-PC-03,lp_jufQh3kqBLkSSc5liwmHFBhJn7m-SB97
+
+2. PLUG USB PEN DRIVE INTO LAB PC.
+
+3. RIGHT-CLICK setup.bat ON USB AND SELECT "Run as administrator".
+
+4. WHAT HAPPENS AUTOMATICALLY:
+   - setup.bat asks for Machine ID (defaults to computer Windows hostname).
+   - It searches api_keys.txt on the USB drive and pulls the matching API key!
+   - It downloads the latest agent pack directly from GitHub (AdityaMittha/LabPulse).
+   - It extracts files to C:\LabPulse, creates config.json, sets up virtualenv.
+   - It registers the Windows Scheduled Tasks (Logon & Shutdown).
+   - It tests the cloud API connection and confirms: [SUCCESS]!
+
+================================================================================
+METHOD 2: MANUAL DOWNLOAD & INSTALLATION (WITHOUT BATCH FILE)
+================================================================================
+
 STEP 1: DOWNLOAD AGENT FILES
   Method A: In the Dashboard, click "Download Agent Pack" in the sidebar 
             and extract the downloaded labpulse-agent.zip.
