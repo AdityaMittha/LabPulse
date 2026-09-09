@@ -352,6 +352,22 @@ Resources:
             Method: POST
             Auth: { Authorizer: NONE }
 
+  AgentHeartbeatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/agent_heartbeat/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref MachinesTable }
+      Events:
+        Heartbeat:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /agent/heartbeat
+            Method: POST
+            Auth: { Authorizer: NONE }
+
   GetAnalyticsFunction:
     Type: AWS::Serverless::Function
     Properties:

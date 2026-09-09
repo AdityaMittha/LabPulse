@@ -322,7 +322,7 @@ def _handle_students(method, body, event):
                 "name":          name or existing.get("name"),
                 "department":    department or existing.get("department"),
                 "year":          year or existing.get("year"),
-                "college_login": college_login or existing.get("college_login"),
+                "college_login": college_login if "college_login" in body else existing.get("college_login", ""),
                 "updated_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             }
             if password:
@@ -334,8 +334,6 @@ def _handle_students(method, body, event):
             return _cors({"error": "Password is compulsory for PC login"}, 400)
         if not name:
             return _cors({"error": "Student name is compulsory"}, 400)
-        if not college_login:
-            return _cors({"error": "Email is compulsory"}, 400)
 
         item = {
             "student_id":    student_id,
@@ -343,7 +341,7 @@ def _handle_students(method, body, event):
             "name":          name,
             "department":    department,
             "year":          year,
-            "college_login": college_login,
+            "college_login": college_login or "",
             "role":          "student",
             "password_hash": "sha256:" + hashlib.sha256(password.encode()).hexdigest(),
             "created_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

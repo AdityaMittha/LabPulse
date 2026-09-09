@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, Users, GraduationCap } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, Users, GraduationCap, Upload, Download, FileSpreadsheet, X, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { fetchStudents, deleteStudent, addStudent, updateStudent, fetchDepartments } from "../api/apiClient";
@@ -32,6 +32,18 @@ export default function AdminStudentsPage() {
   const [submitting,  setSubmitting]  = useState(false);
   const [form, setForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
 
+  // CSV Import & Export State
+  const [showCsvModal,     setShowCsvModal]     = useState(false);
+  const [csvFile,          setCsvFile]          = useState(null);
+  const [parsedRows,       setParsedRows]       = useState([]);
+  const [importing,        setImporting]        = useState(false);
+  const [importProgress,   setImportProgress]   = useState({ current: 0, total: 0 });
+  const [importResults,    setImportResults]    = useState(null);
+  const [defaultDept,      setDefaultDept]      = useState("CSE");
+  const [defaultYear,      setDefaultYear]      = useState("BE");
+  const [defaultPassword,  setDefaultPassword]  = useState("Welcome@123");
+  const fileInputRef = useRef(null);
+
   // Load students & departments from API
   useEffect(() => {
     setLoading(true);
@@ -45,7 +57,9 @@ export default function AdminStudentsPage() {
         setStudents(normalized);
         setDepartments(deptsData);
         if (deptsData.length > 0) {
-          setForm(f => ({ ...f, department: deptsData[0].department_id || deptsData[0].code }));
+          const d0 = deptsData[0].department_id || deptsData[0].code;
+          setForm(f => ({ ...f, department: d0 }));
+          setDefaultDept(d0);
         }
         setLoading(false);
       })
@@ -125,8 +139,12 @@ export default function AdminStudentsPage() {
     const nameVal = form.name.trim();
     const passVal = form.password.trim();
     const emailVal = form.college_login.trim();
-    if (!nameVal || !idVal || !passVal || !emailVal) {
-      alert("Please enter Name, PNR No., Password, and Email (all are compulsory).");
+    if (!nameVal || !idVal || !passVal) {
+      alert("Please enter Name, PNR No., and Password (compulsory).");
+      return;
+    }
+    if (emailVal && !emailVal.includes("@")) {
+      alert("Please enter a valid email address or leave it blank.");
       return;
     }
     setSubmitting(true);
@@ -165,8 +183,12 @@ export default function AdminStudentsPage() {
   const handleSaveEdit = async () => {
     const nameVal = editForm.name.trim();
     const emailVal = editForm.college_login.trim();
-    if (!nameVal || !emailVal) {
-      alert("Name and Email are compulsory.");
+    if (!nameVal) {
+      alert("Name is compulsory.");
+      return;
+    }
+    if (emailVal && !emailVal.includes("@")) {
+      alert("Please enter a valid email address or leave it blank.");
       return;
     }
     setEditSubmitting(true);
@@ -197,6 +219,281 @@ export default function AdminStudentsPage() {
     await deleteStudent(deleteTarget.student_id);
     setStudents(prev => prev.filter(x => x.student_id !== deleteTarget.student_id));
     setDeleteTarget(null);
+  };
+
+  // ── CSV Import & Export Logic ─────────────────────────────────────────────
+
+  const downloadSampleCsv = () => {
+    const d = defaultDept || deptList[0] || "CSE";
+    const csvContent = [
+      "student_id,name,college_login,department,year,password",
+      `2024${d}001,Aarav Sharma,aarav.sharma@college.ac.in,${d},BE,Welcome@123`,
+      `2024${d}002,Priya Patil,priya.patil@college.ac.in,${d},TE,Welcome@123`,
+      `2024${d}003,Rohan Kulkarni,rohan.kulkarni@college.ac.in,${d},SE,Welcome@123`,
+      `2024${d}004,Ananya Deshmukh,ananya.d@college.ac.in,${d},FE,Welcome@123`
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "students_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCurrentStudents = () => {
+    const listToExport = filtered.length > 0 ? filtered : students;
+    if (listToExport.length === 0) {
+      alert("No students to export.");
+      return;
+    }
+    const headers = "student_id,name,college_login,department,year";
+    const rows = listToExport.map(s => {
+      const sId = (s.student_id || s.pnr_no || "").replace(/"/g, '""');
+      const name = (s.name || "").replace(/"/g, '""');
+      const email = (s.college_login || "").replace(/"/g, '""');
+      const dept = (s.department || "").replace(/"/g, '""');
+      const yr = (s.year || "").replace(/"/g, '""');
+      return `"${sId}","${name}","${email}","${dept}","${yr}"`;
+    });
+    const csvContent = [headers, ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const filterSuffix = deptFilter !== "ALL" || yearFilter !== "ALL" ? `_${deptFilter}_${yearFilter}` : "_all";
+    link.setAttribute("download", `students${filterSuffix}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const normalizeYear = (val) => {
+    if (!val) return "";
+    const clean = String(val).trim().toUpperCase();
+    if (YEARS.includes(clean)) return clean;
+    if (clean === "1" || clean.includes("FIRST") || clean === "1ST") return "FE";
+    if (clean === "2" || clean.includes("SECOND") || clean === "2ND") return "SE";
+    if (clean === "3" || clean.includes("THIRD") || clean === "3RD") return "TE";
+    if (clean === "4" || clean.includes("FOURTH") || clean.includes("FINAL") || clean === "4TH") return "BE";
+    return clean;
+  };
+
+  const parseCsvText = (text, fallbackDept = defaultDept, fallbackYear = defaultYear, fallbackPass = defaultPassword) => {
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length < 2) {
+      alert("CSV file is empty or missing data rows.");
+      return [];
+    }
+
+    const rawHeaders = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
+
+    const colMap = {};
+    rawHeaders.forEach((header, index) => {
+      if (header.includes("pnr") || header.includes("student_id") || header.includes("prn") || header.includes("roll")) {
+        colMap.student_id = index;
+      } else if (header.includes("name") || header.includes("fullname")) {
+        colMap.name = index;
+      } else if (header.includes("email") || header.includes("login") || header.includes("mail")) {
+        colMap.college_login = index;
+      } else if (header.includes("dept") || header.includes("branch") || header.includes("department")) {
+        colMap.department = index;
+      } else if (header.includes("year") || header.includes("class") || header.includes("academic_year")) {
+        colMap.year = index;
+      } else if (header.includes("pass") || header.includes("pwd")) {
+        colMap.password = index;
+      }
+    });
+
+    if (colMap.student_id === undefined && rawHeaders.includes("id")) {
+      colMap.student_id = rawHeaders.indexOf("id");
+    }
+
+    const existingIdSet = new Set(students.map(s => (s.student_id || s.pnr_no || "").toLowerCase()));
+    const seenInCsv = new Set();
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = [];
+      let inQuotes = false;
+      let curVal = "";
+      for (let c = 0; c < line.length; c++) {
+        const char = line[c];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(curVal.trim().replace(/^["']|["']$/g, ""));
+          curVal = "";
+        } else {
+          curVal += char;
+        }
+      }
+      values.push(curVal.trim().replace(/^["']|["']$/g, ""));
+
+      const getVal = (field) => {
+        const idx = colMap[field];
+        return idx !== undefined && values[idx] !== undefined ? values[idx].trim() : "";
+      };
+
+      const rawId = getVal("student_id");
+      const name = getVal("name");
+      const email = getVal("college_login");
+      const deptRaw = getVal("department");
+      const yearRaw = getVal("year");
+      const passRaw = getVal("password");
+
+      const student_id = rawId;
+      let department = fallbackDept || "CSE";
+      if (deptRaw) {
+        const found = deptList.find(d => d.toLowerCase() === deptRaw.toLowerCase());
+        department = found || deptRaw.toUpperCase();
+      }
+
+      const year = normalizeYear(yearRaw) || fallbackYear || "BE";
+      const password = passRaw || fallbackPass || student_id;
+
+      const errors = [];
+      if (!student_id) errors.push("Missing Student ID / PNR No.");
+      if (!name) errors.push("Missing Name.");
+      if (email && !email.includes("@")) {
+        errors.push("Invalid Email address format.");
+      }
+      if (!YEARS.includes(year)) {
+        errors.push(`Invalid Year (${year}). Expected FE, SE, TE, or BE.`);
+      }
+      if (!password) {
+        errors.push("Missing Password.");
+      }
+
+      const idLower = student_id.toLowerCase();
+      if (student_id) {
+        if (seenInCsv.has(idLower)) {
+          errors.push(`Duplicate ID within CSV (${student_id}).`);
+        } else {
+          seenInCsv.add(idLower);
+        }
+
+        if (existingIdSet.has(idLower)) {
+          errors.push(`Student with ID ${student_id} already exists.`);
+        }
+      }
+
+      rows.push({
+        id: i,
+        student_id,
+        pnr_no: student_id,
+        name,
+        college_login: email,
+        department,
+        year,
+        password,
+        role: "student",
+        isValid: errors.length === 0,
+        errors,
+      });
+    }
+
+    return rows;
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCsvFile(file);
+    setImportResults(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const rows = parseCsvText(text, defaultDept, defaultYear, defaultPassword);
+      setParsedRows(rows);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDefaultSettingChange = (newDept, newYear, newPass) => {
+    if (csvFile) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target.result;
+        const rows = parseCsvText(text, newDept, newYear, newPass);
+        setParsedRows(rows);
+      };
+      reader.readAsText(csvFile);
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    const validRows = parsedRows.filter(r => r.isValid);
+    if (validRows.length === 0) {
+      alert("No valid rows to import.");
+      return;
+    }
+
+    setImporting(true);
+    setImportProgress({ current: 0, total: validRows.length });
+
+    let successCount = 0;
+    let failCount = 0;
+    const successfullyAdded = [];
+    const failedItems = [];
+
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i];
+      try {
+        const studentPayload = {
+          student_id:    r.student_id,
+          pnr_no:        r.pnr_no || r.student_id,
+          name:          r.name,
+          college_login: r.college_login,
+          password:      r.password,
+          department:    r.department,
+          year:          r.year,
+          role:          "student",
+        };
+        await addStudent(studentPayload);
+        successfullyAdded.push(studentPayload);
+        successCount++;
+      } catch (err) {
+        console.error("Failed to import student:", r.student_id, err);
+        failedItems.push({ student_id: r.student_id, name: r.name, error: err.message });
+        failCount++;
+      }
+      setImportProgress({ current: i + 1, total: validRows.length });
+    }
+
+    if (successfullyAdded.length > 0) {
+      setStudents(prev => {
+        const existingMap = new Map(prev.map(s => [s.student_id, s]));
+        successfullyAdded.forEach(s => existingMap.set(s.student_id, s));
+        return Array.from(existingMap.values());
+      });
+    }
+
+    setImporting(false);
+    setImportResults({
+      success: successCount,
+      failed: failCount,
+      total: validRows.length,
+      failedItems,
+    });
+  };
+
+  const resetCsvModal = () => {
+    setShowCsvModal(false);
+    setCsvFile(null);
+    setParsedRows([]);
+    setImportResults(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const visibleDepts = deptFilter === "ALL" ? deptList : [deptFilter];
@@ -236,9 +533,25 @@ export default function AdminStudentsPage() {
           <h1 className="page-title">Students</h1>
           <p className="page-subtitle">Categorized by department and year ({students.length} total)</p>
         </div>
-        <button className="btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-          <Plus size={14} /> Add Student
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary btn-sm"
+            onClick={exportCurrentStudents}
+            title="Export students as CSV"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => setShowCsvModal(true)}
+            title="Import students from CSV file"
+          >
+            <Upload size={14} /> Import CSV
+          </button>
+          <button className="btn-primary btn-sm" onClick={() => setShowAdd(true)}>
+            <Plus size={14} /> Add Student
+          </button>
+        </div>
       </div>
 
       {/* Department stat cards */}
@@ -367,7 +680,7 @@ export default function AdminStudentsPage() {
                                       </Link>
                                     </td>
                                     <td className="font-mono text-xs font-semibold text-slate-700">{s.student_id || s.pnr_no}</td>
-                                    <td className="text-xs text-slate-400">{s.college_login}</td>
+                                    <td className="text-xs text-slate-400">{s.college_login || "—"}</td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
                                         <button
@@ -422,7 +735,7 @@ export default function AdminStudentsPage() {
                 ["Name", "name", "text", "Full name", true],
                 ["Student ID / PNR No.", "student_id", "text", "e.g. 2024WIT001 (used for ID & PC login)", true],
                 ["Password", "password", "password", "Password for PC login (compulsory)", true],
-                ["Email", "college_login", "email", "name@college.ac.in", true],
+                ["Email (Optional)", "college_login", "email", "name@college.ac.in (optional)", false],
               ].map(([label, key, type, placeholder, compulsory]) => (
                 <div key={key}>
                   <label className="form-label">
@@ -466,7 +779,7 @@ export default function AdminStudentsPage() {
               <button
                 className="btn-primary"
                 onClick={handleAdd}
-                disabled={!form.name.trim() || !form.student_id.trim() || !form.password.trim() || !form.college_login.trim() || submitting}
+                disabled={!form.name.trim() || !form.student_id.trim() || !form.password.trim() || submitting}
               >
                 {submitting ? "Adding…" : "Add Student"}
               </button>
@@ -492,10 +805,11 @@ export default function AdminStudentsPage() {
                 />
               </div>
               <div>
-                <label className="form-label">Email <span className="text-red-500 font-bold">*</span></label>
+                <label className="form-label">Email <span className="text-xs text-slate-400 font-normal">(Optional)</span></label>
                 <input
                   type="email"
                   className="form-input"
+                  placeholder="name@college.ac.in (optional)"
                   value={editForm.college_login}
                   onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
                 />
@@ -530,7 +844,7 @@ export default function AdminStudentsPage() {
               <button
                 className="btn-primary"
                 onClick={handleSaveEdit}
-                disabled={!editForm.name.trim() || !editForm.college_login.trim() || editSubmitting}
+                disabled={!editForm.name.trim() || editSubmitting}
               >
                 {editSubmitting ? "Saving…" : "Save Changes"}
               </button>
@@ -548,6 +862,230 @@ export default function AdminStudentsPage() {
         onConfirm={handleConfirmDelete}
         onClose={() => setDeleteTarget(null)}
       />
+
+      {/* CSV Import Modal */}
+      {showCsvModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 relative max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Import Students from CSV</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Upload a structured CSV file to batch register student profiles for lab access.</p>
+              </div>
+              <button onClick={resetCsvModal} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Template Download Prompt */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3 mb-4 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-600">
+                <FileSpreadsheet size={16} className="text-primary-600 shrink-0" />
+                <span>Need the standard CSV format? Download our pre-formatted sample template.</span>
+              </div>
+              <button
+                type="button"
+                onClick={downloadSampleCsv}
+                className="px-3 py-1 bg-white border border-slate-200 hover:border-slate-300 font-semibold text-primary-600 rounded-md shrink-0 flex items-center gap-1 shadow-2xs transition-all"
+              >
+                <Download size={12} /> Download Template
+              </button>
+            </div>
+
+            {/* Fallback Defaults & File Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+              <div>
+                <label className="form-label text-xs">Default Dept</label>
+                <select
+                  className="form-select text-xs"
+                  value={defaultDept}
+                  onChange={e => {
+                    setDefaultDept(e.target.value);
+                    handleDefaultSettingChange(e.target.value, defaultYear, defaultPassword);
+                  }}
+                  disabled={importing}
+                >
+                  {deptList.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-400">If missing in row</span>
+              </div>
+
+              <div>
+                <label className="form-label text-xs">Default Year</label>
+                <select
+                  className="form-select text-xs"
+                  value={defaultYear}
+                  onChange={e => {
+                    setDefaultYear(e.target.value);
+                    handleDefaultSettingChange(defaultDept, e.target.value, defaultPassword);
+                  }}
+                  disabled={importing}
+                >
+                  {YEARS.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-400">If missing in row</span>
+              </div>
+
+              <div>
+                <label className="form-label text-xs">Default Password</label>
+                <input
+                  type="text"
+                  className="form-input text-xs"
+                  value={defaultPassword}
+                  onChange={e => {
+                    setDefaultPassword(e.target.value);
+                    handleDefaultSettingChange(defaultDept, defaultYear, e.target.value);
+                  }}
+                  placeholder="Welcome@123"
+                  disabled={importing}
+                />
+                <span className="text-[10px] text-slate-400">For PC login if blank</span>
+              </div>
+
+              <div>
+                <label className="form-label text-xs">Select CSV File</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleFileChange}
+                  disabled={importing}
+                  className="form-input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                />
+                <span className="text-[10px] text-slate-400">.csv format</span>
+              </div>
+            </div>
+
+            {/* Import Status Alert */}
+            {importResults && (
+              <div className={`p-3 rounded-lg border text-xs mb-4 flex items-center gap-2 ${
+                importResults.failed === 0
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-amber-50 text-amber-800 border-amber-200"
+              }`}>
+                {importResults.failed === 0 ? (
+                  <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle size={16} className="shrink-0 text-amber-600" />
+                )}
+                <span>
+                  Successfully imported <strong>{importResults.success}</strong> of {importResults.total} students.
+                  {importResults.failed > 0 && ` (${importResults.failed} failed)`}
+                </span>
+              </div>
+            )}
+
+            {/* Preview Table */}
+            {parsedRows.length > 0 && (
+              <div className="flex-1 overflow-y-auto border border-slate-200 rounded-lg mb-4 min-h-[160px]">
+                <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between items-center text-xs font-medium text-slate-600 sticky top-0 z-10">
+                  <span>Preview ({parsedRows.length} rows found)</span>
+                  <div className="flex gap-2 text-[11px]">
+                    <span className="text-emerald-600 font-semibold">
+                      {parsedRows.filter(r => r.isValid).length} Valid
+                    </span>
+                    {parsedRows.filter(r => !r.isValid).length > 0 && (
+                      <span className="text-red-500 font-semibold">
+                        {parsedRows.filter(r => !r.isValid).length} Issues
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50/50 text-slate-500 border-b border-slate-100 font-semibold">
+                    <tr>
+                      <th className="p-2">Student ID / PNR</th>
+                      <th className="p-2">Name</th>
+                      <th className="p-2">Email</th>
+                      <th className="p-2">Dept</th>
+                      <th className="p-2">Year</th>
+                      <th className="p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {parsedRows.map((r) => (
+                      <tr key={r.id} className={r.isValid ? "hover:bg-slate-50/50" : "bg-red-50/40"}>
+                        <td className="p-2 font-mono font-bold text-slate-700">{r.student_id || "—"}</td>
+                        <td className="p-2 font-medium text-slate-800">{r.name || "—"}</td>
+                        <td className="p-2 text-slate-500">{r.college_login || "—"}</td>
+                        <td className="p-2 font-semibold text-slate-600">{r.department}</td>
+                        <td className="p-2">
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${YEAR_COLORS[r.year] || "bg-slate-100"}`}>
+                            {r.year}
+                          </span>
+                        </td>
+                        <td className="p-2">
+                          {r.isValid ? (
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-1.5 py-0.5 rounded border border-emerald-200">
+                              Ready
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[10px] bg-red-50 text-red-700 font-semibold px-1.5 py-0.5 rounded border border-red-200 cursor-help"
+                              title={r.errors.join("; ")}
+                            >
+                              {r.errors[0]}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Progress Bar */}
+            {importing && (
+              <div className="mb-4">
+                <div className="flex justify-between text-xs text-slate-600 mb-1">
+                  <span>Importing students…</span>
+                  <span>{importProgress.current} / {importProgress.total}</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-primary-600 h-full transition-all duration-200"
+                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-auto">
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={resetCsvModal}
+                disabled={importing}
+              >
+                {importResults ? "Close" : "Cancel"}
+              </button>
+
+              <button
+                type="button"
+                className="btn-primary text-xs inline-flex items-center gap-1.5"
+                onClick={handleExecuteImport}
+                disabled={parsedRows.filter(r => r.isValid).length === 0 || importing}
+              >
+                {importing ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" /> Importing…
+                  </>
+                ) : (
+                  <>
+                    <Upload size={13} /> Import {parsedRows.filter(r => r.isValid).length} Students
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

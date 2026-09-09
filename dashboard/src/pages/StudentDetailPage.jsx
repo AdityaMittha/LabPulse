@@ -124,7 +124,7 @@ export default function StudentDetailPage() {
           </div>
           <div>
             <h1 className="page-title">{student.name}</h1>
-            <p className="page-subtitle">{student.student_id} · {student.department} · {student.year} · {student.college_login}</p>
+            <p className="page-subtitle">{student.student_id} · {student.department} · {student.year}{student.college_login ? ` · ${student.college_login}` : ""}</p>
           </div>
         </div>
         <button
@@ -352,10 +352,11 @@ export default function StudentDetailPage() {
                 />
               </div>
               <div>
-                <label className="form-label">Email <span className="text-red-500 font-bold">*</span></label>
+                <label className="form-label">Email <span className="text-xs text-slate-400 font-normal">(Optional)</span></label>
                 <input
                   type="email"
                   className="form-input"
+                  placeholder="name@college.ac.in (optional)"
                   value={editForm.college_login}
                   onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
                 />
@@ -396,8 +397,12 @@ export default function StudentDetailPage() {
               <button
                 className="btn-primary"
                 onClick={async () => {
-                  if (!editForm.name.trim() || !editForm.college_login.trim()) {
-                    alert("Name and Email are required.");
+                  if (!editForm.name.trim()) {
+                    alert("Name is required.");
+                    return;
+                  }
+                  if (editForm.college_login.trim() && !editForm.college_login.includes("@")) {
+                    alert("Please enter a valid email address or leave it blank.");
                     return;
                   }
                   setEditSubmitting(true);
@@ -411,7 +416,7 @@ export default function StudentDetailPage() {
                     setEditSubmitting(false);
                   }
                 }}
-                disabled={!editForm.name.trim() || !editForm.college_login.trim() || editSubmitting}
+                disabled={!editForm.name.trim() || editSubmitting}
               >
                 {editSubmitting ? "Saving…" : "Save Changes"}
               </button>

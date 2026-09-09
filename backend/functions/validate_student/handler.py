@@ -71,11 +71,13 @@ def _make_session_token(session_id: str) -> str:
 
 
 def _find_timetable_slot(lab_id: str) -> str:
-    """Return the active timetable slot_id for the lab at the current time."""
+    """Return the active timetable slot_id for the lab at the current time.
+    Supports minute-level precision and allows a 15-minute early check-in window.
+    """
     now = time.gmtime()
     day_map = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     day = day_map[now.tm_wday]
-    current_time = f"{now.tm_hour:02d}:{now.tm_min:02d}"
+    current_mins = now.tm_hour * 60 + now.tm_min
 
     resp = timetable_table.query(
         IndexName="by_lab",
@@ -83,8 +85,18 @@ def _find_timetable_slot(lab_id: str) -> str:
     )
     for slot in resp.get("Items", []):
         if slot.get("day_of_week") == day:
-            if slot["start_time"] <= current_time < slot["end_time"]:
-                return slot["slot_id"]
+            try:
+                sh, sm = map(int, slot["start_time"].split(":"))
+                eh, em = map(int, slot["end_time"].split(":"))
+                start_mins = sh * 60 + sm
+                end_mins   = eh * 60 + em
+                # Allow early check-in up to 15 minutes before slot starts (e.g. 09:00 for 09:15 slot)
+                if (start_mins - 15) <= current_mins < end_mins:
+                    return slot["slot_id"]
+            except Exception:
+                current_time = f"{now.tm_hour:02d}:{now.tm_min:02d}"
+                if slot.get("start_time", "") <= current_time < slot.get("end_time", ""):
+                    return slot["slot_id"]
     return "NONE"
 
 

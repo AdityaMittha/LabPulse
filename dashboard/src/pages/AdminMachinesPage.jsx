@@ -1,43 +1,47 @@
 import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, Copy, Check, ChevronDown, ChevronRight, Monitor, Wifi, WifiOff, Server } from "lucide-react";
-import { MachineStatusBadge, PageWrapper } from "../components/Shared";
+import { MachineStatusBadge, PageWrapper, getMachineStatus } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchMachines, fetchLabs, addMachine, updateMachine, deleteMachine, copyToClipboard } from "../api/apiClient";
+import { fetchMachines, fetchLabs, fetchUsage, addMachine, updateMachine, deleteMachine, copyToClipboard } from "../api/apiClient";
 import ConfirmModal from "../components/ConfirmModal";
 
-const STATUSES     = ["active", "inactive"];
-const STATUS_LABELS = { active: "Active Machines", inactive: "Inactive Machines" };
+const STATUSES     = ["online", "offline", "inactive"];
+const STATUS_LABELS = { online: "Online Machines", offline: "Offline Machines", inactive: "Disabled / Inactive Machines" };
 
 const STATUS_COLORS = {
-  active:   "bg-emerald-50 text-emerald-700",
+  online:   "bg-emerald-50 text-emerald-700",
+  offline:  "bg-slate-100 text-slate-600",
   inactive: "bg-red-50 text-red-600",
 };
 
 export default function AdminMachinesPage() {
-  const [labs,         setLabs]         = useState([]);
-  const [machines,     setMachines]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
-  const [search,       setSearch]       = useState("");
-  const [labFilter,    setLabFilter]    = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newKey,       setNewKey]       = useState("");
-  const [copied,       setCopied]       = useState(false);
-  const [submitting,   setSubmitting]   = useState(false);
+  const [labs,           setLabs]           = useState([]);
+  const [machines,       setMachines]       = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(null);
+  const [search,         setSearch]         = useState("");
+  const [labFilter,      setLabFilter]      = useState("ALL");
+  const [statusFilter,   setStatusFilter]   = useState("ALL");
+  const [showAddModal,   setShowAddModal]   = useState(false);
+  const [newKey,         setNewKey]         = useState("");
+  const [copied,         setCopied]         = useState(false);
+  const [submitting,     setSubmitting]     = useState(false);
   const [form, setForm] = useState({ machine_id: "", lab_id: "", hostname: "" });
 
   const [expandedLabs,     setExpandedLabs]     = useState(() => new Set());
   const [expandedStatuses, setExpandedStatuses] = useState(() => new Set());
 
-  // Load labs and machines from API
+  // Load labs, machines, and today's sessions from API
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchLabs(), fetchMachines()])
-      .then(([labsList, machList]) => {
+    const today = new Date().toISOString().slice(0, 10);
+    Promise.all([fetchLabs(), fetchMachines(), fetchUsage({ date: today }).catch(() => [])])
+      .then(([labsList, machList, sessionsList]) => {
         setLabs(labsList);
         setMachines(machList);
+        setActiveSessions(sessionsList || []);
         if (labsList.length > 0) {
           setExpandedLabs(new Set(labsList.map(l => l.lab_id)));
           setForm(f => ({ ...f, lab_id: labsList[0].lab_id }));
@@ -63,12 +67,17 @@ export default function AdminMachinesPage() {
     });
   };
 
-  const filtered = useMemo(() => machines.filter(m =>
-    (labFilter === "ALL" || m.lab_id === labFilter) &&
-    (statusFilter === "ALL" || m.status === statusFilter) &&
-    (m.machine_id.toLowerCase().includes(search.toLowerCase()) ||
-     (m.hostname || "").toLowerCase().includes(search.toLowerCase()))
-  ), [machines, labFilter, statusFilter, search]);
+  const filtered = useMemo(() => machines.filter(m => {
+    const liveStatus = getMachineStatus(m, activeSessions);
+    const matchesLab = labFilter === "ALL" || m.lab_id === labFilter;
+    const matchesStatus = statusFilter === "ALL" ||
+      (statusFilter === "active" ? m.status === "active" :
+       statusFilter === "inactive" ? m.status === "inactive" :
+       statusFilter === liveStatus);
+    const matchesSearch = m.machine_id.toLowerCase().includes(search.toLowerCase()) ||
+      (m.hostname || "").toLowerCase().includes(search.toLowerCase());
+    return matchesLab && matchesStatus && matchesSearch;
+  }), [machines, labFilter, statusFilter, search, activeSessions]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -77,25 +86,34 @@ export default function AdminMachinesPage() {
       STATUSES.forEach(s => { map[l.lab_id][s] = []; });
     });
     filtered.forEach(m => {
-      if (map[m.lab_id] && map[m.lab_id][m.status]) {
-        map[m.lab_id][m.status].push(m);
+      const liveStatus = getMachineStatus(m, activeSessions);
+      if (map[m.lab_id]) {
+        if (map[m.lab_id][liveStatus]) {
+          map[m.lab_id][liveStatus].push(m);
+        } else {
+          map[m.lab_id].offline.push(m);
+        }
       }
     });
     return map;
-  }, [filtered, labs]);
+  }, [filtered, labs, activeSessions]);
 
   const labCounts = useMemo(() => {
     const counts = {};
     labs.forEach(l => {
       const labMachines = machines.filter(m => m.lab_id === l.lab_id);
+      const onlineCount = labMachines.filter(m => getMachineStatus(m, activeSessions) === "online").length;
+      const offlineCount = labMachines.filter(m => getMachineStatus(m, activeSessions) === "offline").length;
+      const inactiveCount = labMachines.filter(m => m.status === "inactive").length;
       counts[l.lab_id] = {
         total:    labMachines.length,
-        active:   labMachines.filter(m => m.status === "active").length,
-        inactive: labMachines.filter(m => m.status === "inactive").length,
+        online:   onlineCount,
+        offline:  offlineCount,
+        inactive: inactiveCount,
       };
     });
     return counts;
-  }, [machines, labs]);
+  }, [machines, labs, activeSessions]);
 
   const handleAdd = async () => {
     if (!form.machine_id.trim() || !form.hostname.trim() || !form.lab_id.trim()) {
@@ -174,10 +192,11 @@ export default function AdminMachinesPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const visibleLabs    = labFilter === "ALL" ? labs : labs.filter(l => l.lab_id === labFilter);
+  const visibleLabs     = labFilter === "ALL" ? labs : labs.filter(l => l.lab_id === labFilter);
   const visibleStatuses = statusFilter === "ALL" ? STATUSES : [statusFilter];
-  const totalActive    = machines.filter(m => m.status === "active").length;
-  const totalInactive  = machines.filter(m => m.status === "inactive").length;
+  const totalOnline     = machines.filter(m => getMachineStatus(m, activeSessions) === "online").length;
+  const totalOffline    = machines.filter(m => getMachineStatus(m, activeSessions) === "offline").length;
+  const totalInactive   = machines.filter(m => m.status === "inactive").length;
 
   // Generate a color class for a lab given its index
   const getLabColor = idx => {
@@ -222,7 +241,7 @@ export default function AdminMachinesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Machines</h1>
-          <p className="page-subtitle">Categorized by lab ({machines.length} total · {totalActive} active · {totalInactive} inactive)</p>
+          <p className="page-subtitle">Categorized by lab ({machines.length} total · {totalOnline} online · {totalOffline} offline{totalInactive > 0 ? ` · ${totalInactive} inactive` : ""})</p>
         </div>
         <button className="btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
           <Plus size={14} /> Add Machine
@@ -255,12 +274,17 @@ export default function AdminMachinesPage() {
                   <p className="stat-label">{l.name}</p>
                   <p className="stat-value mt-1">{counts.total}</p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-                      <Wifi size={10} /> {counts.active}
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium" title="Online now">
+                      <Wifi size={10} /> {counts.online}
                     </span>
-                    <span className="flex items-center gap-1 text-[10px] text-red-400 font-medium">
-                      <WifiOff size={10} /> {counts.inactive}
+                    <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium" title="Offline">
+                      <WifiOff size={10} /> {counts.offline}
                     </span>
+                    {counts.inactive > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] text-red-400 font-medium" title="Disabled / Inactive">
+                        ● {counts.inactive}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Monitor size={18} className="text-slate-300 mt-0.5" />
@@ -282,7 +306,8 @@ export default function AdminMachinesPage() {
         </select>
         <select className="form-select w-28" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="ALL">All Status</option>
-          <option value="active">Active</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
           <option value="inactive">Inactive</option>
         </select>
         <button className="btn-secondary btn-sm text-xs"
@@ -320,14 +345,19 @@ export default function AdminMachinesPage() {
                   <p className="text-xs text-slate-400 mt-0.5">{lab.building} · {lab.floor} Floor · {labMachines.length} machines</p>
                 </div>
                 <div className="hidden sm:flex items-center gap-1.5 mr-2">
-                  {activeCount > 0 && (
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS.active}`}>
-                      Active: {activeCount}
+                  {labMachines.filter(m => getMachineStatus(m, activeSessions) === "online").length > 0 && (
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS.online}`}>
+                      Online: {labMachines.filter(m => getMachineStatus(m, activeSessions) === "online").length}
                     </span>
                   )}
-                  {inactiveCount > 0 && (
+                  {labMachines.filter(m => getMachineStatus(m, activeSessions) === "offline").length > 0 && (
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS.offline}`}>
+                      Offline: {labMachines.filter(m => getMachineStatus(m, activeSessions) === "offline").length}
+                    </span>
+                  )}
+                  {labMachines.filter(m => m.status === "inactive").length > 0 && (
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS.inactive}`}>
-                      Inactive: {inactiveCount}
+                      Inactive: {labMachines.filter(m => m.status === "inactive").length}
                     </span>
                   )}
                 </div>
@@ -354,7 +384,7 @@ export default function AdminMachinesPage() {
                             : <ChevronRight size={14} className="text-slate-400 shrink-0" />
                           }
                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${STATUS_COLORS[status]}`}>
-                            {status === "active" ? <Wifi size={10} className="inline mr-1" /> : <WifiOff size={10} className="inline mr-1" />}
+                            {status === "online" ? <Wifi size={10} className="inline mr-1" /> : <WifiOff size={10} className="inline mr-1" />}
                             {status.toUpperCase()}
                           </span>
                           <span className="text-sm font-medium text-slate-600">{STATUS_LABELS[status]}</span>
@@ -384,11 +414,14 @@ export default function AdminMachinesPage() {
                                     </td>
                                     <td className="text-sm text-slate-600">{m.hostname}</td>
                                     <td className="font-mono text-xs text-slate-400">{m.ip_address || "—"}</td>
-                                    <td><MachineStatusBadge status={m.status} /></td>
+                                    <td><MachineStatusBadge machine={m} activeSessions={activeSessions} /></td>
                                     <td className="text-xs text-slate-400">
                                       {m.last_seen_at
-                                        ? new Date(m.last_seen_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-                                        : "—"}
+                                        ? new Date(m.last_seen_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) +
+                                          (new Date(m.last_seen_at).toDateString() !== new Date().toDateString()
+                                            ? ` (${new Date(m.last_seen_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })})`
+                                            : "")
+                                        : "Never"}
                                     </td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">

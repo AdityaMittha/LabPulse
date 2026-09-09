@@ -6,6 +6,7 @@ import {
 import { Link } from "react-router-dom";
 import { PageWrapper } from "../components/Shared";
 import { fetchLabs, fetchTimetable, addTimetableSlot, deleteTimetableSlot } from "../api/apiClient";
+import { LAB_SLOT_PRESETS } from "../data/mockData";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -29,7 +30,7 @@ export default function AdminTimetablePage() {
   const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({
-    lab_id: "", day_of_week: "MON", start_time: "09:00", end_time: "10:00",
+    lab_id: "", day_of_week: "MON", start_time: "09:15", end_time: "11:15",
     course_code: "", faculty_name: "", student_group: "", expected_count: "25"
   });
 
@@ -138,12 +139,12 @@ export default function AdminTimetablePage() {
     const defaultLab = labFilter || (labs[0]?.lab_id) || "CS-LAB-1";
     const csvContent = [
       "lab_id,day_of_week,start_time,end_time,course_code,faculty_name,student_group,expected_count",
-      `${defaultLab},MON,09:00,11:00,CS301-Data Structures Lab,Dr. S. K. Sharma,CSE-B1,25`,
+      `${defaultLab},MON,09:15,11:15,CS301-Data Structures Lab,Dr. S. K. Sharma,CSE-B1,25`,
       `${defaultLab},MON,11:15,13:15,CS302-Operating Systems Lab,Prof. P. R. Kulkarni,CSE-B2,28`,
-      `${defaultLab},TUE,10:00,12:00,CS303-Database Systems Lab,Dr. A. B. Joshi,CSE-B1,25`,
-      `${defaultLab},WED,14:00,16:00,CS304-Computer Networks Lab,Prof. M. V. Patil,CSE-B3,24`,
-      `${defaultLab},THU,09:00,11:00,CS305-Web Technologies Lab,Dr. N. T. Kadam,CSE-B2,26`,
-      `${defaultLab},FRI,11:15,13:15,CS306-Cloud Computing Lab,Prof. R. S. Mane,CSE-B1,30`
+      `${defaultLab},TUE,09:15,11:15,CS303-Database Systems Lab,Dr. A. B. Joshi,CSE-B1,25`,
+      `${defaultLab},WED,13:15,15:15,CS304-Computer Networks Lab,Prof. M. V. Patil,CSE-B3,24`,
+      `${defaultLab},THU,09:15,11:15,CS305-Web Technologies Lab,Dr. N. T. Kadam,CSE-B2,26`,
+      `${defaultLab},FRI,15:30,17:30,CS306-Cloud Computing Lab,Prof. R. S. Mane,CSE-B1,30`
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -494,6 +495,25 @@ export default function AdminTimetablePage() {
                 <select className="form-select" value={form.day_of_week} onChange={e => setForm(f=>({...f,day_of_week:e.target.value}))}>
                   {DAYS.map(d => <option key={d}>{d}</option>)}
                 </select>
+              </div>
+              <div className="col-span-2">
+                <label className="form-label text-xs">Standard Session Presets (Click to apply)</label>
+                <div className="flex flex-wrap gap-1 mt-1 max-h-24 overflow-y-auto p-1 bg-slate-50 border border-slate-200 rounded-lg">
+                  {LAB_SLOT_PRESETS.map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, start_time: p.start, end_time: p.end }))}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-all ${
+                        form.start_time === p.start && form.end_time === p.end
+                          ? "bg-primary-600 text-white border-primary-600 font-semibold shadow-2xs"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="form-label">Start Time <span className="text-red-500 font-bold ml-1">*</span></label>

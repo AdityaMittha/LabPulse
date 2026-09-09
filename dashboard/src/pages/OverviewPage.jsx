@@ -5,9 +5,9 @@ import {
 import {
   Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu, Globe
 } from "lucide-react";
-import { todayStr, formatDuration } from "../data/mockData";
+import { todayStr, formatDuration, COLLEGE_PERIODS } from "../data/mockData";
 import {
-  StatCard, ComplianceBadge, SectionHeading, PageWrapper
+  StatCard, ComplianceBadge, SectionHeading, PageWrapper, getMachineStatus
 } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -72,22 +72,27 @@ export default function OverviewPage({ globalDate }) {
   );
 
   const activeMachines = visibleMachines.filter(m => m.status === "active").length;
-  const onlineNow      = Math.min(activeMachines, Math.max(0, Math.floor(activeMachines * 0.6)));
+  const onlineNow = useMemo(() => {
+    return visibleMachines.filter(m => getMachineStatus(m, todaySessions) === "online").length;
+  }, [visibleMachines, todaySessions]);
 
   const complianceAll = useMemo(() => {
     const c = todaySessions.filter(s => s.compliance_status === "compliant").length;
     return todaySessions.length > 0 ? Math.round((c / todaySessions.length) * 100) : 0;
   }, [todaySessions]);
 
-  // Hourly utilization across all visible labs
+  // Period-wise utilization across all visible labs (09:15-10:15, etc.)
   const hourlyData = useMemo(() => {
-    return Array.from({ length: 9 }, (_, i) => {
-      const hour = i + 9;
+    return COLLEGE_PERIODS.map(period => {
+      const startMins = period.startH * 60 + period.startM;
+      const endMins   = period.endH * 60 + period.endM;
       const count = todaySessions.filter(s => {
+        if (!s.login_time) return false;
         const d = new Date(s.login_time);
-        return d.getHours() === hour;
+        const mins = d.getHours() * 60 + d.getMinutes();
+        return mins >= startMins && mins < endMins;
       }).length;
-      return { hour: `${hour}:00`, sessions: count };
+      return { hour: period.label, periodName: period.name, range: period.range, sessions: count };
     });
   }, [todaySessions]);
 
@@ -158,15 +163,22 @@ export default function OverviewPage({ globalDate }) {
         <StatCard label="Active Students"  value={new Set(todaySessions.map(s => s.student_id)).size} icon={Users}       color="amber"  />
       </div>
 
-      {/* Hourly bar chart */}
+      {/* Hourly / Period-wise bar chart */}
       <div className="card card-body mb-6">
-        <SectionHeading title="Hourly Sessions — All Labs" />
+        <SectionHeading title="Sessions by Period — All Labs" />
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
             <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "#f5f5f4" }} />
+            <Tooltip
+              contentStyle={{ border: "1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }}
+              cursor={{ fill: "#f5f5f4" }}
+              labelFormatter={(label, payload) => {
+                const item = payload?.[0]?.payload;
+                return item?.range ? `${item.periodName} (${item.range})` : label;
+              }}
+            />
             <Bar dataKey="sessions" fill="#0d9488" radius={[4, 4, 0, 0]} name="Sessions" />
           </BarChart>
         </ResponsiveContainer>

@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     "idle_threshold_seconds": 60,
     "summary_interval_minutes": 60,
     "retry_interval_minutes": 5,
+    "heartbeat_interval_minutes": 8,    # how often to ping last_seen_at between summaries
     "max_validate_attempts": 3,
     "log_level": "INFO",
 }

@@ -114,7 +114,11 @@ class TestAuth(unittest.TestCase):
     def test_invalid_credentials_401(self, mock_post):
         """401 response returns failure with appropriate error."""
         from auth import validate_college_id
-        mock_post.return_value = MagicMock(status_code=401)
+        # Correctly mock resp.json().get("error", ...) to return the error string
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401
+        mock_resp.json.return_value = {"error": "Invalid PNR or password."}
+        mock_post.return_value = mock_resp
         result = validate_college_id("wrong_id", "wrong_pw", self._make_config())
         self.assertFalse(result.success)
         self.assertIn("Invalid", result.error)
@@ -180,12 +184,13 @@ class TestAuth(unittest.TestCase):
         validate_college_id("2023BCS001", "mypassword", self._make_config())
         call_kwargs = mock_post.call_args
         sent_payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
-        self.assertEqual(sent_payload["college_login"], "2023BCS001")
+        # auth.py now sends pnr_no (not the old college_login field)
+        self.assertEqual(sent_payload["pnr_no"], "2023BCS001")
         self.assertEqual(sent_payload["password"], "mypassword")
         self.assertEqual(sent_payload["machine_id"], "TEST-PC-01")
         self.assertEqual(sent_payload["lab_id"], "TEST-LAB-1")
         self.assertIn("timestamp", sent_payload)
-        print("  [PASS] Credentials payload sent with correct structure")
+        print("  [PASS] Credentials payload sent with correct structure (pnr_no field)")
 
 
 # ===========================================================================

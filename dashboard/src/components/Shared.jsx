@@ -39,14 +39,52 @@ export function ComplianceBadge({ status }) {
   return <span className={m.cls}>{m.label}</span>;
 }
 
-// â”€â”€ Machine Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export function MachineStatusBadge({ status }) {
+// ── Machine Live Status Resolver ──────────────────────────────────────────────
+export function getMachineStatus(machine, activeSessions = [], thresholdMinutes = 15) {
+  if (!machine) return "offline";
+  const adminStatus = machine.status || "active";
+  if (adminStatus === "inactive") return "inactive";
+  if (adminStatus === "retired") return "retired";
+
+  // 1. Check if there is an ongoing session on this machine (logout_time is null or empty)
+  if (Array.isArray(activeSessions) && activeSessions.length > 0) {
+    const hasActiveSession = activeSessions.some(
+      s => s && s.machine_id === machine.machine_id && (!s.logout_time || s.logout_time === "")
+    );
+    if (hasActiveSession) return "online";
+  }
+
+  // 2. Check if last_seen_at heartbeat was within threshold (default 15 mins)
+  if (machine.last_seen_at) {
+    const lastSeenTime = new Date(machine.last_seen_at).getTime();
+    if (!isNaN(lastSeenTime)) {
+      const diffMinutes = (Date.now() - lastSeenTime) / (1000 * 60);
+      if (diffMinutes >= 0 && diffMinutes <= thresholdMinutes) {
+        return "online";
+      }
+    }
+  }
+
+  return "offline";
+}
+
+// ── Machine Status Badge ─────────────────────────────────────────────────────
+export function MachineStatusBadge({ status, machine, activeSessions }) {
+  let resolved = status;
+  if (machine) {
+    resolved = getMachineStatus(machine, activeSessions);
+  } else if (!resolved) {
+    resolved = "offline";
+  }
+
   const map = {
-    active:   { cls: "badge-success", label: "â— Online" },
-    inactive: { cls: "badge-danger",  label: "â— Offline" },
+    online:   { cls: "badge-success", label: "● Online" },
+    active:   { cls: "badge-success", label: "● Online" },
+    offline:  { cls: "badge-gray",    label: "○ Offline" },
+    inactive: { cls: "badge-danger",  label: "● Inactive" },
     retired:  { cls: "badge-gray",    label: "Retired" },
   };
-  const m = map[status] || map.inactive;
+  const m = map[resolved] || map.offline;
   return <span className={m.cls}>{m.label}</span>;
 }
 

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Monitor, Clock, Activity, CheckCircle2, Edit2 } from "lucide-react";
-import { formatDuration, todayStr } from "../data/mockData";
+import { formatDuration, todayStr, COLLEGE_PERIODS } from "../data/mockData";
 import { StatCard, ComplianceBadge, MachineStatusBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
 import { fetchMachines, fetchUsage, fetchLabs, deleteMachine, updateMachine } from "../api/apiClient";
 import ConfirmModal from "../components/ConfirmModal";
@@ -71,16 +71,19 @@ export default function MachineDetailPage() {
       .slice(0, 6);
   }, [sessions]);
 
-  // Hourly session count
+  // Period session count (09:15-10:15, etc.)
   const hourlyData = useMemo(() => {
-    const counts = Array(24).fill(0);
-    todaySessions.forEach(s => {
-      const h = new Date(s.login_time).getHours();
-      if (h >= 0 && h < 24) counts[h]++;
+    return COLLEGE_PERIODS.map(period => {
+      const startMins = period.startH * 60 + period.startM;
+      const endMins   = period.endH * 60 + period.endM;
+      const count = todaySessions.filter(s => {
+        if (!s.login_time) return false;
+        const d = new Date(s.login_time);
+        const mins = d.getHours() * 60 + d.getMinutes();
+        return mins >= startMins && mins < endMins;
+      }).length;
+      return { hour: period.label, range: period.range, sessions: count };
     });
-    return counts
-      .map((c, h) => ({ hour: `${String(h).padStart(2, "0")}:00`, sessions: c }))
-      .filter((_, h) => h >= 7 && h <= 20);
   }, [todaySessions]);
 
   if (loading) {
@@ -143,7 +146,7 @@ export default function MachineDetailPage() {
           >
             <Edit2 size={14} /> Edit Machine
           </button>
-          <MachineStatusBadge status={machine.status} />
+          <MachineStatusBadge machine={machine} activeSessions={sessions} />
         </div>
       </div>
 
@@ -180,13 +183,14 @@ export default function MachineDetailPage() {
           <SectionHeading title="Machine Info" />
           <dl className="divide-y divide-slate-100/60 text-sm">
             {[
-              ["Machine ID", <code key="id" className="font-mono text-xs bg-slate-50 px-1 rounded">{machine.machine_id}</code>],
-              ["Hostname",   machine.hostname],
-              ["IP Address", machine.ip_address || "—"],
-              ["Lab",        lab?.name || "—"],
-              ["Building",   lab?.building || "—"],
-              ["Status",     <MachineStatusBadge key="status" status={machine.status} />],
-              ["Last Seen",  lastSeen?.toLocaleString("en-IN") || "—"],
+              ["Machine ID",    <code key="id" className="font-mono text-xs bg-slate-50 px-1 rounded">{machine.machine_id}</code>],
+              ["Hostname",      machine.hostname],
+              ["IP Address",    machine.ip_address || "—"],
+              ["Lab",           lab?.name || "—"],
+              ["Building",      lab?.building || "—"],
+              ["Live Status",   <MachineStatusBadge key="status" machine={machine} activeSessions={sessions} />],
+              ["Admin Status",  <span key="adm" className="capitalize font-medium text-slate-700">{machine.status || "active"}</span>],
+              ["Last Seen",     lastSeen ? lastSeen.toLocaleString("en-IN") : "Never logged in"],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center py-2.5 gap-4">
                 <dt className="w-32 text-slate-400 shrink-0 text-xs font-medium">{label}</dt>

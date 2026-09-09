@@ -57,8 +57,10 @@ class Uploader:
     def __init__(self, config: dict):
         self.summary_url     = f"{config['api_base_url']}/agent/summary"
         self.session_end_url = f"{config['api_base_url']}/agent/session-end"
+        self.heartbeat_url   = f"{config['api_base_url']}/agent/heartbeat"
         self.api_key         = config["api_key"]
         self.retry_interval  = config.get("retry_interval_minutes", 5) * 60
+        self.heartbeat_interval = config.get("heartbeat_interval_minutes", 8) * 60
 
         db_file = _db_path()
         self._conn = sqlite3.connect(db_file, check_same_thread=False)
@@ -94,6 +96,46 @@ class Uploader:
         except requests.exceptions.RequestException as exc:
             logger.warning("Upload failed (will queue): %s", exc)
             return False
+
+    # ── Heartbeat ──────────────────────────────────────────────────────────────
+
+    def send_heartbeat(self, machine_id: str, session_id: str = "") -> bool:
+        """Send a lightweight heartbeat ping to keep last_seen_at current.
+        Called every heartbeat_interval (default 8 minutes) so the dashboard
+        always shows real-time machine online status between hourly summaries.
+        """
+        payload = {
+            "machine_id": machine_id,
+            "session_id": session_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        try:
+            resp = requests.post(
+                self.heartbeat_url, json=payload,
+                headers=self._headers(), timeout=8,
+            )
+            if resp.status_code in (200, 201, 204):
+                logger.debug("Heartbeat sent ✓")
+                return True
+            logger.debug("Heartbeat rejected: %s", resp.status_code)
+            return False
+        except requests.exceptions.RequestException as exc:
+            logger.debug("Heartbeat failed (network): %s", exc)
+            return False
+
+    def start_heartbeat_loop(self, machine_id: str, session_id: str = ""):
+        """Start background thread that sends periodic heartbeats."""
+        def _loop():
+            while self._running:
+                time.sleep(self.heartbeat_interval)
+                try:
+                    self.send_heartbeat(machine_id, session_id)
+                except Exception as exc:
+                    logger.debug("Heartbeat loop error: %s", exc)
+
+        hb_thread = threading.Thread(target=_loop, daemon=True, name="uploader-heartbeat")
+        hb_thread.start()
+        logger.info("Heartbeat loop started (interval=%ds)", self.heartbeat_interval)
 
     # ── Hourly summaries ──────────────────────────────────────────────────────
 

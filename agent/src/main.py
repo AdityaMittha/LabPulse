@@ -302,6 +302,10 @@ def run_session():
     uploader.set_session_token(session_token)
     tracker.start()
     uploader.start_retry_loop()
+    # Send an immediate heartbeat on login so the dashboard shows this machine online,
+    # then continue sending every heartbeat_interval (default 8 min).
+    uploader.send_heartbeat(config["machine_id"], session_id)
+    uploader.start_heartbeat_loop(config["machine_id"], session_id)
 
     # ── Step 5: atexit hook (fallback for unexpected exits) ───────────────────
     def on_exit():

@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Monitor, Users, CheckCircle2, Activity, Globe, Edit2, Trash2 } from "lucide-react";
-import { todayStr, formatDuration } from "../data/mockData";
+import { todayStr, formatDuration, COLLEGE_PERIODS } from "../data/mockData";
 import {
   StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper
 } from "../components/Shared";
@@ -12,8 +12,7 @@ import { fetchUsage, fetchMachines, fetchTopSites, fetchLabs, updateLab, deleteL
 import { useAuth } from "../auth/AuthContext";
 import ConfirmModal from "../components/ConfirmModal";
 
-// Heatmap: hour × day
-const HOURS = ["9","10","11","12","13","14","15","16","17"];
+// Heatmap: period × day
 const DAYS  = ["MON","TUE","WED","THU","FRI"];
 
 function HeatmapCell({ value, max }) {
@@ -149,10 +148,16 @@ export default function LabDetailPage({ globalDate }) {
   const daySessions = sessionsData;
 
   const hourlyData = useMemo(() => {
-    return Array.from({ length: 9 }, (_, i) => {
-      const hour  = i + 9;
-      const count = daySessions.filter(s => new Date(s.login_time).getHours() === hour).length;
-      return { hour: `${hour}:00`, sessions: count };
+    return COLLEGE_PERIODS.map(period => {
+      const startMins = period.startH * 60 + period.startM;
+      const endMins   = period.endH * 60 + period.endM;
+      const count = daySessions.filter(s => {
+        if (!s.login_time) return false;
+        const d = new Date(s.login_time);
+        const mins = d.getHours() * 60 + d.getMinutes();
+        return mins >= startMins && mins < endMins;
+      }).length;
+      return { hour: period.label, periodName: period.name, range: period.range, sessions: count };
     });
   }, [daySessions]);
 
@@ -164,22 +169,31 @@ export default function LabDetailPage({ globalDate }) {
     return { total, compliant, partial, non_compliant };
   }, [daySessions]);
 
-  // Heatmap: sessions[day][hour]
+  // Heatmap: sessions[day][periodId]
   const heatmapData = useMemo(() => {
     const map = {};
-    DAYS.forEach(d => { map[d] = {}; HOURS.forEach(h => { map[d][h] = 0; }); });
+    DAYS.forEach(d => {
+      map[d] = {};
+      COLLEGE_PERIODS.forEach(p => { map[d][p.id] = 0; });
+    });
     allLabSessions.forEach(s => {
-      const dt   = new Date(s.login_time);
-      const day  = DAYS[dt.getDay() - 1];
-      const hour = String(dt.getHours());
-      if (day && map[day] && map[day][hour] !== undefined) map[day][hour]++;
+      if (!s.login_time) return;
+      const dt = new Date(s.login_time);
+      const day = DAYS[dt.getDay() - 1];
+      const mins = dt.getHours() * 60 + dt.getMinutes();
+      const period = COLLEGE_PERIODS.find(p => mins >= (p.startH * 60 + p.startM) && mins < (p.endH * 60 + p.endM));
+      if (day && period && map[day] && map[day][period.id] !== undefined) {
+        map[day][period.id]++;
+      }
     });
     return map;
   }, [allLabSessions]);
 
   const maxHeatVal = useMemo(() => {
     let m = 0;
-    DAYS.forEach(d => HOURS.forEach(h => { if (heatmapData[d]?.[h] > m) m = heatmapData[d][h]; }));
+    DAYS.forEach(d => COLLEGE_PERIODS.forEach(p => {
+      if ((heatmapData[d]?.[p.id] || 0) > m) m = heatmapData[d][p.id];
+    }));
     return m || 1;
   }, [heatmapData]);
 
@@ -288,16 +302,23 @@ export default function LabDetailPage({ globalDate }) {
         </div>
       </div>
 
-      {/* Hourly bar + heatmap */}
+      {/* Period-wise bar + heatmap */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="card card-body">
-          <SectionHeading title="Hourly Sessions" />
+          <SectionHeading title="Sessions by Period" />
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={hourlyData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
               <XAxis dataKey="hour" tick={{ fontSize: 11, fill:"#78716c" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill:"#78716c" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ border:"1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }} cursor={{ fill:"#f5f5f4" }} />
+              <Tooltip
+                contentStyle={{ border:"1px solid #e7e5e4", borderRadius: 10, fontSize: 12 }}
+                cursor={{ fill:"#f5f5f4" }}
+                labelFormatter={(label, payload) => {
+                  const item = payload?.[0]?.payload;
+                  return item?.range ? `${item.periodName} (${item.range})` : label;
+                }}
+              />
               <Bar dataKey="sessions" fill="#0d9488" radius={[4,4,0,0]} name="Sessions" />
             </BarChart>
           </ResponsiveContainer>
@@ -305,21 +326,23 @@ export default function LabDetailPage({ globalDate }) {
 
         {/* Heatmap */}
         <div className="card card-body">
-          <SectionHeading title="Hour × Day Heatmap" />
+          <SectionHeading title="Period × Day Heatmap" />
           <div className="overflow-x-auto">
             <div className="inline-flex gap-2">
               {/* Y-axis labels */}
               <div className="flex flex-col gap-1 pt-6">
-                {HOURS.map(h => (
-                  <div key={h} className="text-xs text-slate-400 text-right pr-1 flex items-center justify-end" style={{ height: 36 }}>{h}:00</div>
+                {COLLEGE_PERIODS.map(p => (
+                  <div key={p.id} className="text-xs text-slate-400 text-right pr-1 flex items-center justify-end font-mono" style={{ height: 36 }} title={p.range}>
+                    {p.label}
+                  </div>
                 ))}
               </div>
               <div className="flex gap-1">
                 {DAYS.map(day => (
                   <div key={day} className="flex flex-col gap-1 items-center">
                     <div className="text-xs text-slate-500 font-medium mb-1">{day}</div>
-                    {HOURS.map(h => (
-                      <HeatmapCell key={h} value={heatmapData[day]?.[h] || 0} max={maxHeatVal} />
+                    {COLLEGE_PERIODS.map(p => (
+                      <HeatmapCell key={p.id} value={heatmapData[day]?.[p.id] || 0} max={maxHeatVal} />
                     ))}
                   </div>
                 ))}
