@@ -19,24 +19,32 @@ export default function CompliancePage({ globalDate }) {
   const [timetableData, setTimetableData] = useState([]);
   const [sessionsData,  setSessionsData]  = useState([]);
   const [studentsData,  setStudentsData]  = useState([]);
-  const [loading,       setLoading]       = useState(true);
+  // Start false — we only show the spinner when a lab is actually being loaded
+  const [loading,       setLoading]       = useState(false);
+  const [labsLoading,   setLabsLoading]   = useState(true);
   const [error,         setError]         = useState(null);
 
   useEffect(() => {
     if (globalDate) setSelectedDate(globalDate);
   }, [globalDate]);
 
-  // Load labs on mount
+  // Load labs on mount — own loading state so the spinner isn't stuck waiting for selectedLab
   useEffect(() => {
+    setLabsLoading(true);
     fetchLabs().then(labsList => {
       const visible = isAdmin
         ? labsList
         : labsList.filter(l => l.department?.includes(user.department) || user.department?.includes(l.department));
       setLabsData(visible);
       if (visible.length > 0) setSelectedLab(visible[0].lab_id);
-    }).catch(err => setError(err.message));
+      setLabsLoading(false);
+    }).catch(err => {
+      setError(err.message);
+      setLabsLoading(false);
+    });
   }, [isAdmin, user]);
 
+  // Load compliance data whenever lab or date changes
   useEffect(() => {
     if (!selectedLab) return;
     let active = true;
@@ -105,13 +113,13 @@ export default function CompliancePage({ globalDate }) {
   const compliancePct = rows.length > 0
     ? Math.round((compCounts.compliant / rows.length) * 100) : 0;
 
-  if (loading) {
+  if (labsLoading || loading) {
     return (
       <PageWrapper>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-slate-200 border-t-primary-600 rounded-full animate-spin"></div>
-            <span className="text-sm text-slate-400">Loading compliance data…</span>
+            <span className="text-sm text-slate-400">{labsLoading ? "Loading labs…" : "Loading compliance data…"}</span>
           </div>
         </div>
       </PageWrapper>
@@ -125,6 +133,19 @@ export default function CompliancePage({ globalDate }) {
           <div className="text-center">
             <p className="text-red-500 font-medium text-sm">Failed to load compliance data</p>
             <p className="text-slate-400 text-xs mt-1">{error}</p>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (!labsLoading && labsData.length === 0) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+          <div className="text-center">
+            <p className="text-slate-500 font-medium text-sm">No labs found</p>
+            <p className="text-slate-400 text-xs mt-1">Add a lab in Admin → Labs first.</p>
           </div>
         </div>
       </PageWrapper>
