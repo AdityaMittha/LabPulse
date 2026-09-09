@@ -86,19 +86,19 @@ with users_table.batch_writer() as batch:
 print("\n=== Seeding Timetable ===")
 SLOTS = [
     # CS Lab 1
-    {"lab_id": "CS-LAB-1", "day": "MON", "start": "09:15", "end": "11:15", "course": "CS301-DS Lab",   "faculty": "Dr. S. Kulkarni", "group": "CSE-SEM5"},
-    {"lab_id": "CS-LAB-1", "day": "MON", "start": "11:15", "end": "13:15", "course": "CS302-OS Lab",   "faculty": "Prof. P. Jadhav", "group": "CSE-SEM5"},
-    {"lab_id": "CS-LAB-1", "day": "TUE", "start": "09:15", "end": "11:15", "course": "CS303-CN Lab",   "faculty": "Dr. R. Deshmukh", "group": "CSE-SEM6"},
-    {"lab_id": "CS-LAB-1", "day": "WED", "start": "13:15", "end": "15:15", "course": "CS201-OOP Lab",  "faculty": "Prof. A. Patil",  "group": "CSE-SEM3"},
-    {"lab_id": "CS-LAB-1", "day": "THU", "start": "09:15", "end": "11:15", "course": "CS401-AI Lab",   "faculty": "Dr. K. Shinde",   "group": "CSE-SEM7"},
-    {"lab_id": "CS-LAB-1", "day": "FRI", "start": "15:30", "end": "17:30", "course": "CS403-ML Lab",   "faculty": "Prof. V. Mane",   "group": "CSE-SEM7"},
+    {"lab_id": "CS-LAB-1", "day": "MON", "start": "09:15", "end": "11:15", "year": "TY", "course": "CS301-DS Lab",   "faculty": "Dr. S. Kulkarni", "group": "CSE-SEM5"},
+    {"lab_id": "CS-LAB-1", "day": "MON", "start": "11:15", "end": "13:15", "year": "TY", "course": "CS302-OS Lab",   "faculty": "Prof. P. Jadhav", "group": "CSE-SEM5"},
+    {"lab_id": "CS-LAB-1", "day": "TUE", "start": "09:15", "end": "11:15", "year": "TY", "course": "CS303-CN Lab",   "faculty": "Dr. R. Deshmukh", "group": "CSE-SEM6"},
+    {"lab_id": "CS-LAB-1", "day": "WED", "start": "13:15", "end": "15:15", "year": "SY", "course": "CS201-OOP Lab",  "faculty": "Prof. A. Patil",  "group": "CSE-SEM3"},
+    {"lab_id": "CS-LAB-1", "day": "THU", "start": "09:15", "end": "11:15", "year": "BE", "course": "CS401-AI Lab",   "faculty": "Dr. K. Shinde",   "group": "CSE-SEM7"},
+    {"lab_id": "CS-LAB-1", "day": "FRI", "start": "15:30", "end": "17:30", "year": "BE", "course": "CS403-ML Lab",   "faculty": "Prof. V. Mane",   "group": "CSE-SEM7"},
     # IT Lab
-    {"lab_id": "IT-LAB",   "day": "MON", "start": "11:15", "end": "13:15", "course": "IT201-Prog Lab", "faculty": "Prof. S. More",   "group": "IT-SEM3"},
-    {"lab_id": "IT-LAB",   "day": "WED", "start": "09:15", "end": "11:15", "course": "IT301-Web Lab",  "faculty": "Dr. N. Kadam",    "group": "IT-SEM5"},
-    {"lab_id": "IT-LAB",   "day": "FRI", "start": "13:15", "end": "15:15", "course": "IT401-DB Lab",   "faculty": "Prof. V. Mane",   "group": "IT-SEM6"},
+    {"lab_id": "IT-LAB",   "day": "MON", "start": "11:15", "end": "13:15", "year": "SY", "course": "IT201-Prog Lab", "faculty": "Prof. S. More",   "group": "IT-SEM3"},
+    {"lab_id": "IT-LAB",   "day": "WED", "start": "09:15", "end": "11:15", "year": "TY", "course": "IT301-Web Lab",  "faculty": "Dr. N. Kadam",    "group": "IT-SEM5"},
+    {"lab_id": "IT-LAB",   "day": "FRI", "start": "13:15", "end": "15:15", "year": "BE", "course": "IT401-DB Lab",   "faculty": "Prof. V. Mane",   "group": "IT-SEM6"},
     # E&TC Lab
-    {"lab_id": "ETC-LAB",  "day": "TUE", "start": "13:15", "end": "15:15", "course": "EC301-DSP Lab",  "faculty": "Dr. R. Deshmukh", "group": "ETC-SEM5"},
-    {"lab_id": "ETC-LAB",  "day": "THU", "start": "11:15", "end": "13:15", "course": "EC401-Emb Lab",  "faculty": "Dr. S. Kulkarni", "group": "ETC-SEM7"},
+    {"lab_id": "ETC-LAB",  "day": "TUE", "start": "13:15", "end": "15:15", "year": "TY", "course": "EC301-DSP Lab",  "faculty": "Dr. R. Deshmukh", "group": "ETC-SEM5"},
+    {"lab_id": "ETC-LAB",  "day": "THU", "start": "11:15", "end": "13:15", "year": "BE", "course": "EC401-Emb Lab",  "faculty": "Dr. S. Kulkarni", "group": "ETC-SEM7"},
 ]
 
 with timetable_table.batch_writer() as batch:
@@ -110,6 +110,7 @@ with timetable_table.batch_writer() as batch:
             "day_of_week":   s["day"],
             "start_time":    s["start"],
             "end_time":      s["end"],
+            "year":          s.get("year", "BE"),
             "course_code":   s["course"],
             "faculty_name":  s["faculty"],
             "student_group": s["group"],

@@ -9,29 +9,55 @@ import { fetchLabs, fetchTimetable, addTimetableSlot, deleteTimetableSlot } from
 import { LAB_SLOT_PRESETS } from "../data/mockData";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const YEARS = ["FY", "SY", "TY", "BE"];
+const YEAR_LABELS = {
+  FY: "FY (First Year / FE)",
+  SY: "SY (Second Year / SE)",
+  TY: "TY (Third Year / TE)",
+  BE: "BE (Final Year)",
+};
+
+const YEAR_BADGES = {
+  FY: "bg-blue-50 text-blue-700 border-blue-200",
+  SY: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  TY: "bg-amber-50 text-amber-700 border-amber-200",
+  BE: "bg-purple-50 text-purple-700 border-purple-200",
+};
+
+const normalizeYear = (yr) => {
+  if (!yr) return "BE";
+  const u = yr.toString().trim().toUpperCase();
+  if (u === "FE" || u === "FY" || u === "FIRST" || u === "1" || u === "1ST") return "FY";
+  if (u === "SE" || u === "SY" || u === "SECOND" || u === "2" || u === "2ND") return "SY";
+  if (u === "TE" || u === "TY" || u === "THIRD" || u === "3" || u === "3RD") return "TY";
+  if (u === "BE" || u === "FINAL" || u === "FOURTH" || u === "4" || u === "4TH") return "BE";
+  return u;
+};
 
 export default function AdminTimetablePage() {
   const [labs,        setLabs]        = useState([]);
   const [slots,       setSlots]       = useState([]);
   const [labFilter,   setLabFilter]   = useState("");
+  const [yearFilter,  setYearFilter]  = useState("ALL");
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
   const [showAdd,     setShowAdd]     = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
 
   // CSV Import State
-  const [showCsvModal,   setShowCsvModal]   = useState(false);
-  const [csvFile,        setCsvFile]        = useState(null);
-  const [parsedRows,     setParsedRows]     = useState([]);
-  const [importing,      setImporting]      = useState(false);
-  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
-  const [importResults,  setImportResults]  = useState(null);
-  const [targetLabId,    setTargetLabId]    = useState("");
+  const [showCsvModal,      setShowCsvModal]      = useState(false);
+  const [csvFile,           setCsvFile]           = useState(null);
+  const [parsedRows,        setParsedRows]        = useState([]);
+  const [importing,         setImporting]         = useState(false);
+  const [importProgress,    setImportProgress]    = useState({ current: 0, total: 0 });
+  const [importResults,     setImportResults]     = useState(null);
+  const [targetLabId,       setTargetLabId]       = useState("");
+  const [defaultImportYear, setDefaultImportYear] = useState("BE");
   const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({
     lab_id: "", day_of_week: "MON", start_time: "09:15", end_time: "11:15",
-    course_code: "", faculty_name: "", student_group: "", expected_count: "25"
+    year: "BE", course_code: "", faculty_name: "", student_group: "", expected_count: "25"
   });
 
   // Load labs on mount
@@ -70,10 +96,16 @@ export default function AdminTimetablePage() {
   }, [labFilter]);
 
   const filtered = useMemo(() =>
-    slots.filter(s => s.lab_id === labFilter).sort((a, b) =>
-      DAYS.indexOf(a.day_of_week) - DAYS.indexOf(b.day_of_week) || (a.start_time || "").localeCompare(b.start_time || "")
-    ),
-    [slots, labFilter]
+    slots
+      .filter(s => {
+        if (s.lab_id !== labFilter) return false;
+        if (yearFilter !== "ALL" && normalizeYear(s.year || "BE") !== yearFilter) return false;
+        return true;
+      })
+      .sort((a, b) =>
+        DAYS.indexOf(a.day_of_week) - DAYS.indexOf(b.day_of_week) || (a.start_time || "").localeCompare(b.start_time || "")
+      ),
+    [slots, labFilter, yearFilter]
   );
 
   const byDay = useMemo(() => {
@@ -100,6 +132,7 @@ export default function AdminTimetablePage() {
       const slotPayload = {
         ...form,
         lab_id:         labFilter,
+        year:           normalizeYear(form.year || "BE"),
         expected_count: parseInt(form.expected_count) || 25,
       };
       const result = await addTimetableSlot(slotPayload);
@@ -114,6 +147,7 @@ export default function AdminTimetablePage() {
         course_code: "",
         faculty_name: "",
         student_group: "",
+        year: "BE",
         expected_count: "25"
       }));
     } catch (err) {
@@ -138,13 +172,13 @@ export default function AdminTimetablePage() {
   const downloadSampleCsv = () => {
     const defaultLab = labFilter || (labs[0]?.lab_id) || "CS-LAB-1";
     const csvContent = [
-      "lab_id,day_of_week,start_time,end_time,course_code,faculty_name,student_group,expected_count",
-      `${defaultLab},MON,09:15,11:15,CS301-Data Structures Lab,Dr. S. K. Sharma,CSE-B1,25`,
-      `${defaultLab},MON,11:15,13:15,CS302-Operating Systems Lab,Prof. P. R. Kulkarni,CSE-B2,28`,
-      `${defaultLab},TUE,09:15,11:15,CS303-Database Systems Lab,Dr. A. B. Joshi,CSE-B1,25`,
-      `${defaultLab},WED,13:15,15:15,CS304-Computer Networks Lab,Prof. M. V. Patil,CSE-B3,24`,
-      `${defaultLab},THU,09:15,11:15,CS305-Web Technologies Lab,Dr. N. T. Kadam,CSE-B2,26`,
-      `${defaultLab},FRI,15:30,17:30,CS306-Cloud Computing Lab,Prof. R. S. Mane,CSE-B1,30`
+      "lab_id,day_of_week,start_time,end_time,year,course_code,faculty_name,student_group,expected_count",
+      `${defaultLab},MON,09:15,11:15,TY,CS301-Data Structures Lab,Dr. S. K. Sharma,CSE-B1,25`,
+      `${defaultLab},MON,11:15,13:15,TY,CS302-Operating Systems Lab,Prof. P. R. Kulkarni,CSE-B2,28`,
+      `${defaultLab},TUE,09:15,11:15,SY,CS201-OOP Lab,Dr. A. B. Joshi,CSE-B1,25`,
+      `${defaultLab},WED,13:15,15:15,FY,FE101-Basic Programming Lab,Prof. M. V. Patil,CSE-B3,24`,
+      `${defaultLab},THU,09:15,11:15,BE,CS401-Cloud Computing Lab,Dr. N. T. Kadam,CSE-B2,26`,
+      `${defaultLab},FRI,15:30,17:30,BE,CS402-Deep Learning Lab,Prof. R. S. Mane,CSE-B1,30`
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -162,9 +196,9 @@ export default function AdminTimetablePage() {
       alert("No timetable slots to export for this lab.");
       return;
     }
-    const headers = "lab_id,day_of_week,start_time,end_time,course_code,faculty_name,student_group,expected_count";
+    const headers = "lab_id,day_of_week,start_time,end_time,year,course_code,faculty_name,student_group,expected_count";
     const rows = filtered.map(s =>
-      `"${s.lab_id}","${s.day_of_week}","${s.start_time}","${s.end_time}","${(s.course_code || "").replace(/"/g, '""')}","${(s.faculty_name || "").replace(/"/g, '""')}","${(s.student_group || "").replace(/"/g, '""')}",${s.expected_count || 25}`
+      `"${s.lab_id}","${s.day_of_week}","${s.start_time}","${s.end_time}","${normalizeYear(s.year || "BE")}","${(s.course_code || "").replace(/"/g, '""')}","${(s.faculty_name || "").replace(/"/g, '""')}","${(s.student_group || "").replace(/"/g, '""')}",${s.expected_count || 25}`
     );
     const csvContent = [headers, ...rows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -193,9 +227,10 @@ export default function AdminTimetablePage() {
       else if (header.includes("day")) colMap.day_of_week = index;
       else if (header.includes("start")) colMap.start_time = index;
       else if (header.includes("end")) colMap.end_time = index;
+      else if (header.includes("year") || header.includes("batch") || header === "yr") colMap.year = index;
       else if (header.includes("course") || header.includes("subject")) colMap.course_code = index;
       else if (header.includes("faculty") || header.includes("teacher") || header.includes("prof")) colMap.faculty_name = index;
-      else if (header.includes("group") || header.includes("batch") || header.includes("class")) colMap.student_group = index;
+      else if (header.includes("group") || header.includes("division") || header.includes("class")) colMap.student_group = index;
       else if (header.includes("count") || header.includes("capacity") || header.includes("students")) colMap.expected_count = index;
     });
 
@@ -229,6 +264,8 @@ export default function AdminTimetablePage() {
       const rawDay = (getVal("day_of_week") || "MON").toUpperCase().slice(0, 3);
       const startTime = getVal("start_time");
       const endTime = getVal("end_time");
+      const rawYear = getVal("year");
+      const year = normalizeYear(rawYear || defaultImportYear || "BE");
       const course = getVal("course_code");
       const faculty = getVal("faculty_name");
       const group = getVal("student_group") || "ALL";
@@ -249,6 +286,7 @@ export default function AdminTimetablePage() {
         day_of_week: rawDay,
         start_time: startTime,
         end_time: endTime,
+        year,
         course_code: course,
         faculty_name: faculty,
         student_group: group,
@@ -297,6 +335,7 @@ export default function AdminTimetablePage() {
           day_of_week:   r.day_of_week,
           start_time:    r.start_time,
           end_time:      r.end_time,
+          year:          r.year || defaultImportYear || "BE",
           course_code:   r.course_code,
           faculty_name:  r.faculty_name,
           student_group: r.student_group,
@@ -394,31 +433,50 @@ export default function AdminTimetablePage() {
         </div>
       </div>
 
-      {/* Lab selector */}
-      <div className="flex gap-2 mb-5 flex-wrap items-center">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Select Lab:</span>
-        {labs.length === 0 ? (
-          <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-            No computer labs exist yet. Please{" "}
-            <Link to="/admin/labs" className="underline font-semibold text-primary-600 hover:text-primary-700">
-              create a lab
-            </Link>{" "}
-            first.
-          </div>
-        ) : (
-          labs.map(l => (
-            <button key={l.lab_id}
-              onClick={() => setLabFilter(l.lab_id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                labFilter === l.lab_id
-                  ? "bg-primary-600 text-white border-primary-600 shadow-xs"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+      {/* Filters: Lab & Year */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-5 bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Select Lab:</span>
+          {labs.length === 0 ? (
+            <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+              No computer labs exist yet. Please{" "}
+              <Link to="/admin/labs" className="underline font-semibold text-primary-600 hover:text-primary-700">
+                create a lab
+              </Link>{" "}
+              first.
+            </div>
+          ) : (
+            labs.map(l => (
+              <button key={l.lab_id}
+                onClick={() => setLabFilter(l.lab_id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  labFilter === l.lab_id
+                    ? "bg-primary-600 text-white border-primary-600 shadow-xs"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {l.name} <span className="opacity-70 font-mono text-[11px]">({l.lab_id})</span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Batch / Year:</span>
+          {["ALL", ...YEARS].map(y => (
+            <button
+              key={y}
+              onClick={() => setYearFilter(y)}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${
+                yearFilter === y
+                  ? "bg-slate-800 text-white border-slate-800 shadow-xs"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               }`}
             >
-              {l.name} <span className="opacity-70 font-mono text-[11px]">({l.lab_id})</span>
+              {y}
             </button>
-          ))
-        )}
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -443,8 +501,13 @@ export default function AdminTimetablePage() {
                   byDay[day].map(slot => (
                     <div key={slot.slot_id}
                       className="bg-primary-50/60 hover:bg-primary-50 rounded-lg p-2.5 text-xs group relative border border-primary-100/60 transition-all">
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start gap-1">
                         <span className="font-semibold text-primary-700">{slot.start_time}–{slot.end_time}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                          YEAR_BADGES[normalizeYear(slot.year)] || "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}>
+                          {normalizeYear(slot.year || "BE")}
+                        </span>
                       </div>
                       <p className="text-slate-800 font-medium mt-1 truncate" title={slot.course_code}>
                         {slot.course_code}
@@ -453,7 +516,9 @@ export default function AdminTimetablePage() {
                         {slot.faculty_name}
                       </p>
                       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-primary-100/50 text-[10px] text-slate-400">
-                        <span>{slot.student_group}</span>
+                        <span className="font-medium text-slate-600 truncate max-w-[110px]" title={slot.student_group}>
+                          {slot.student_group}
+                        </span>
                         <span>{slot.expected_count} seats</span>
                       </div>
                       <button
@@ -532,6 +597,14 @@ export default function AdminTimetablePage() {
                 <input className="form-input" placeholder="e.g. Dr. S. K. Sharma" value={form.faculty_name} onChange={e => setForm(f=>({...f,faculty_name:e.target.value}))} />
               </div>
               <div>
+                <label className="form-label">Academic Year / Batch <span className="text-red-500 font-bold ml-1">*</span></label>
+                <select className="form-select" value={form.year} onChange={e => setForm(f=>({...f,year:e.target.value}))}>
+                  {YEARS.map(y => (
+                    <option key={y} value={y}>{YEAR_LABELS[y]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="form-label">Student Group / Batch <span className="text-red-500 font-bold ml-1">*</span></label>
                 <input className="form-input" placeholder="e.g. CSE-B1" value={form.student_group} onChange={e => setForm(f=>({...f,student_group:e.target.value}))} />
               </div>
@@ -592,8 +665,8 @@ export default function AdminTimetablePage() {
               </button>
             </div>
 
-            {/* Target Lab & File Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {/* Target Lab, Default Year & File Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
               <div>
                 <label className="form-label text-xs">Target Computer Lab</label>
                 <select
@@ -608,7 +681,31 @@ export default function AdminTimetablePage() {
                     </option>
                   ))}
                 </select>
-                <span className="text-[11px] text-slate-400">Used if row does not specify a lab_id</span>
+                <span className="text-[11px] text-slate-400">Fallback if not in CSV</span>
+              </div>
+
+              <div>
+                <label className="form-label text-xs">Default Year / Batch</label>
+                <select
+                  className="form-select text-xs"
+                  value={defaultImportYear}
+                  onChange={e => {
+                    const newYr = e.target.value;
+                    setDefaultImportYear(newYr);
+                    if (parsedRows.length > 0) {
+                      setParsedRows(prev => prev.map(r => ({
+                        ...r,
+                        year: r.year || newYr
+                      })));
+                    }
+                  }}
+                  disabled={importing}
+                >
+                  {YEARS.map(y => (
+                    <option key={y} value={y}>{YEAR_LABELS[y]}</option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-slate-400">Fallback if not in CSV</span>
               </div>
 
               <div>
@@ -661,6 +758,7 @@ export default function AdminTimetablePage() {
                       <th className="p-2">Day</th>
                       <th className="p-2">Time</th>
                       <th className="p-2">Lab</th>
+                      <th className="p-2">Year</th>
                       <th className="p-2">Course</th>
                       <th className="p-2">Faculty</th>
                       <th className="p-2">Group</th>
@@ -673,6 +771,13 @@ export default function AdminTimetablePage() {
                         <td className="p-2 font-mono font-bold text-slate-700">{r.day_of_week}</td>
                         <td className="p-2 font-mono text-slate-600">{r.start_time}–{r.end_time}</td>
                         <td className="p-2 text-slate-600 font-mono text-[11px]">{targetLabId || r.lab_id}</td>
+                        <td className="p-2">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                            YEAR_BADGES[r.year] || "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}>
+                            {r.year}
+                          </span>
+                        </td>
                         <td className="p-2 font-medium text-slate-800 truncate max-w-[120px]">{r.course_code}</td>
                         <td className="p-2 text-slate-600 truncate max-w-[100px]">{r.faculty_name}</td>
                         <td className="p-2 text-slate-500">{r.student_group}</td>

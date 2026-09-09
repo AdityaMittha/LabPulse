@@ -182,7 +182,7 @@ export default function CompliancePage({ globalDate }) {
               <option value="">All slots</option>
               {labSlots.map(t => (
                 <option key={t.slot_id} value={t.slot_id}>
-                  {t.day_of_week} {t.start_time}–{t.end_time} · {t.course_code}
+                  {t.year ? `[${t.year}] ` : ""}{t.day_of_week} {t.start_time}–{t.end_time} · {t.course_code}
                 </option>
               ))}
             </select>

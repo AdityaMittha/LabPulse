@@ -70,19 +70,37 @@ def _make_session_token(session_id: str) -> str:
     return f"{msg}:{sig}"
 
 
-def _find_timetable_slot(lab_id: str) -> str:
+def _normalize_year(yr: str) -> str:
+    if not yr:
+        return ""
+    y = yr.strip().upper()
+    if y in ("FE", "FY", "FIRST"):
+        return "FY"
+    if y in ("SE", "SY", "SECOND"):
+        return "SY"
+    if y in ("TE", "TY", "THIRD"):
+        return "TY"
+    if y in ("BE", "FINAL", "FOURTH"):
+        return "BE"
+    return y
+
+
+def _find_timetable_slot(lab_id: str, student_year: str = "") -> str:
     """Return the active timetable slot_id for the lab at the current time.
-    Supports minute-level precision and allows a 15-minute early check-in window.
+    Supports minute-level precision, allows a 15-minute early check-in window,
+    and prioritizes slots matching the student's academic year (FY, SY, TY, BE).
     """
     now = time.gmtime()
     day_map = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     day = day_map[now.tm_wday]
     current_mins = now.tm_hour * 60 + now.tm_min
+    std_norm = _normalize_year(student_year)
 
     resp = timetable_table.query(
         IndexName="by_lab",
         KeyConditionExpression=Key("lab_id").eq(lab_id),
     )
+    matching_slots = []
     for slot in resp.get("Items", []):
         if slot.get("day_of_week") == day:
             try:
@@ -92,12 +110,22 @@ def _find_timetable_slot(lab_id: str) -> str:
                 end_mins   = eh * 60 + em
                 # Allow early check-in up to 15 minutes before slot starts (e.g. 09:00 for 09:15 slot)
                 if (start_mins - 15) <= current_mins < end_mins:
-                    return slot["slot_id"]
+                    matching_slots.append(slot)
             except Exception:
                 current_time = f"{now.tm_hour:02d}:{now.tm_min:02d}"
                 if slot.get("start_time", "") <= current_time < slot.get("end_time", ""):
-                    return slot["slot_id"]
-    return "NONE"
+                    matching_slots.append(slot)
+
+    if not matching_slots:
+        return "NONE"
+
+    # Prioritize slot explicitly matching the student's year/batch
+    if std_norm:
+        for s in matching_slots:
+            if _normalize_year(s.get("year", "")) == std_norm:
+                return s["slot_id"]
+
+    return matching_slots[0]["slot_id"]
 
 
 # ── Main handler ─────────────────────────────────────────────────────────────
@@ -165,7 +193,7 @@ def lambda_handler(event, context):
     # Create session record
     session_id     = str(uuid.uuid4())
     login_time     = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    timetable_slot = _find_timetable_slot(lab_id)
+    timetable_slot = _find_timetable_slot(lab_id, student.get("year", ""))
 
     sessions_table.put_item(Item={
         "session_id":        session_id,

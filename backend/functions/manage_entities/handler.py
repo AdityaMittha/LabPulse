@@ -380,6 +380,7 @@ def _handle_timetable(method, body, event):
         day_of_week   = (body.get("day_of_week") or "").strip()
         start_time    = (body.get("start_time") or "").strip()
         end_time      = (body.get("end_time") or "").strip()
+        year          = (body.get("year") or "").strip().upper() or "BE"
         course_code   = (body.get("course_code") or "").strip()
         faculty_name  = (body.get("faculty_name") or "").strip()
         student_group = (body.get("student_group") or "").strip()
@@ -395,6 +396,7 @@ def _handle_timetable(method, body, event):
             "day_of_week":   day_of_week,
             "start_time":    start_time,
             "end_time":      end_time,
+            "year":          year,
             "course_code":   course_code,
             "faculty_name":  faculty_name,
             "student_group": student_group,
