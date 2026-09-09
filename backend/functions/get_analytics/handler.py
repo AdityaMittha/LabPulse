@@ -68,13 +68,42 @@ def _get_usage(qs: dict):
             ScanIndexForward=False,
         )
         items = resp.get("Items", [])
-    elif lab_id and date:
-        resp = sessions_table.query(
-            IndexName="by_lab_date",
-            KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").eq(date),
-            Limit=limit,
-        )
-        items = resp.get("Items", [])
+    elif lab_id:
+        if date:
+            resp = sessions_table.query(
+                IndexName="by_lab_date",
+                KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").eq(date),
+                Limit=limit,
+            )
+            items = resp.get("Items", [])
+        elif date_from and date_to:
+            resp = sessions_table.query(
+                IndexName="by_lab_date",
+                KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").between(date_from, date_to),
+                Limit=limit,
+            )
+            items = resp.get("Items", [])
+        elif date_from:
+            resp = sessions_table.query(
+                IndexName="by_lab_date",
+                KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").gte(date_from),
+                Limit=limit,
+            )
+            items = resp.get("Items", [])
+        elif date_to:
+            resp = sessions_table.query(
+                IndexName="by_lab_date",
+                KeyConditionExpression=Key("lab_id").eq(lab_id) & Key("date").lte(date_to),
+                Limit=limit,
+            )
+            items = resp.get("Items", [])
+        else:
+            resp = sessions_table.query(
+                IndexName="by_lab_date",
+                KeyConditionExpression=Key("lab_id").eq(lab_id),
+                Limit=limit,
+            )
+            items = resp.get("Items", [])
     else:
         # Scan with filter (use sparingly — add more GSIs for production)
         filter_expr = None

@@ -130,7 +130,7 @@ function ProtectedLayout({ requireAdmin = false }) {
             <Route path="/machines/:machineId" element={<MachineDetailPage />} />
             <Route path="/students/:studentId" element={<StudentDetailPage />} />
             <Route path="/compliance" element={<CompliancePage globalDate={globalDate} />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports" element={<ReportsPage globalDate={globalDate} onDateChange={setGlobalDate} />} />
             {isAdmin && <>
               <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
               <Route path="/admin/labs"        element={<AdminLabsPage />} />
