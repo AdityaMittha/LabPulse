@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { User, Clock, Monitor, CheckCircle2, Activity, Globe, ExternalLink } from "lucide-react";
+import { User, Clock, Monitor, CheckCircle2, Activity, Globe, ExternalLink, Edit2 } from "lucide-react";
 import { formatDuration } from "../data/mockData";
 import { StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
-import { fetchUsage, fetchStudents, fetchStudentBrowserActivity, deleteStudent, fetchLabs } from "../api/apiClient";
+import { fetchUsage, fetchStudents, fetchStudentBrowserActivity, deleteStudent, updateStudent, fetchLabs } from "../api/apiClient";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function StudentDetailPage() {
   const { studentId } = useParams();
@@ -16,6 +17,11 @@ export default function StudentDetailPage() {
   const [browserData,    setBrowserData]    = useState({ sites: [], page_log: [] });
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
+
+  const [showEdit,       setShowEdit]       = useState(false);
+  const [editForm,       setEditForm]       = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "", year: "", college_login: "" });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -111,7 +117,7 @@ export default function StudentDetailPage() {
   return (
     <PageWrapper>
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-base">
             {student.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
@@ -121,6 +127,23 @@ export default function StudentDetailPage() {
             <p className="page-subtitle">{student.student_id} · {student.department} · {student.year} · {student.college_login}</p>
           </div>
         </div>
+        <button
+          className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          onClick={() => {
+            setEditForm({
+              name: student.name || "",
+              student_id: student.student_id || student.pnr_no || "",
+              pnr_no: student.student_id || student.pnr_no || "",
+              password: "",
+              department: student.department || "CSE",
+              year: student.year || "BE",
+              college_login: student.college_login || "",
+            });
+            setShowEdit(true);
+          }}
+        >
+          <Edit2 size={14} /> Edit Student
+        </button>
       </div>
 
       {/* Stats */}
@@ -303,20 +326,7 @@ export default function StudentDetailPage() {
           </p>
           <div className="mt-4 flex items-center gap-3">
             <button
-              onClick={async () => {
-                const conf = window.prompt(`To confirm deletion, type the student ID "${student.student_id}":`);
-                if (conf === student.student_id) {
-                  try {
-                    await deleteStudent(student.student_id);
-                    alert("Student and all associated data successfully deleted.");
-                    navigate("/admin/students");
-                  } catch (err) {
-                    alert("Failed to delete student: " + err.message);
-                  }
-                } else if (conf !== null) {
-                  alert("Incorrect student ID. Deletion cancelled.");
-                }
-              }}
+              onClick={() => setShowDeleteModal(true)}
               className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
             >
               Delete Student &amp; All Data
@@ -324,6 +334,104 @@ export default function StudentDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit Student Modal */}
+      {showEdit && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-1">Edit Student</h2>
+            <p className="text-xs text-slate-400 mb-4 font-mono">{editForm.student_id}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="form-label">Name <span className="text-red-500 font-bold">*</span></label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">Email <span className="text-red-500 font-bold">*</span></label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={editForm.college_login}
+                  onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">Password <span className="text-xs text-slate-400 font-normal">(Leave blank to keep unchanged)</span></label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="New password (optional)"
+                  value={editForm.password}
+                  onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Department <span className="text-red-500 font-bold">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editForm.department}
+                    onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Year <span className="text-red-500 font-bold">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editForm.year}
+                    onChange={e => setEditForm(f => ({ ...f, year: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button className="btn-secondary" onClick={() => setShowEdit(false)} disabled={editSubmitting}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  if (!editForm.name.trim() || !editForm.college_login.trim()) {
+                    alert("Name and Email are required.");
+                    return;
+                  }
+                  setEditSubmitting(true);
+                  try {
+                    await updateStudent(editForm);
+                    setStudent(prev => ({ ...prev, ...editForm }));
+                    setShowEdit(false);
+                  } catch (err) {
+                    alert("Failed to update student: " + err.message);
+                  } finally {
+                    setEditSubmitting(false);
+                  }
+                }}
+                disabled={!editForm.name.trim() || !editForm.college_login.trim() || editSubmitting}
+              >
+                {editSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        title={`Delete Student: ${student?.name || student?.student_id}`}
+        message={`Are you sure you want to permanently delete student "${student?.name}" (${student?.student_id})? This will erase the student record and ALL associated session history, app usage metrics, and activity logs.`}
+        confirmLabel="Delete & Erase All Data"
+        onConfirm={async () => {
+          await deleteStudent(student.student_id);
+          navigate("/admin/students");
+        }}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </PageWrapper>
   );
 }

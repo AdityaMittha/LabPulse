@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
-import { Plus, Search, Trash2, FlaskConical, MapPin, Cpu, Users, ChevronRight, Layers } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, FlaskConical, MapPin, Cpu, Users, ChevronRight, Layers } from "lucide-react";
 import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchLabs, fetchMachines, addLab, deleteLab, fetchDepartments } from "../api/apiClient";
+import { fetchLabs, fetchMachines, addLab, updateLab, deleteLab, fetchDepartments } from "../api/apiClient";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function AdminLabsPage() {
   const [labs,       setLabs]       = useState([]);
@@ -80,14 +81,45 @@ export default function AdminLabsPage() {
     }
   };
 
-  const handleDelete = async (labId, labName) => {
-    if (!window.confirm(`Are you sure you want to delete lab "${labName || labId}"?\n\nThis will remove the lab configuration from the system.`)) return;
-    try {
-      await deleteLab(labId);
-      setLabs(prev => prev.filter(l => l.lab_id !== labId));
-    } catch (err) {
-      alert("Failed to delete lab: " + err.message);
+  const [editingLab, setEditingLab] = useState(null);
+  const [editForm, setEditForm] = useState({ lab_id: "", name: "", department: "CSE", building: "", floor: "", capacity: 30 });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleOpenEdit = lab => {
+    setEditingLab(lab);
+    setEditForm({
+      lab_id: lab.lab_id,
+      name: lab.name || "",
+      department: lab.department || (departments[0]?.department_id || "CSE"),
+      building: lab.building || "",
+      floor: lab.floor || "",
+      capacity: lab.capacity || 30,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.name.trim() || !editForm.department.trim()) {
+      alert("Name and department are compulsory.");
+      return;
     }
+    setEditSubmitting(true);
+    try {
+      await updateLab(editForm);
+      setLabs(prev => prev.map(l => l.lab_id === editingLab.lab_id ? { ...l, ...editForm } : l));
+      setEditingLab(null);
+    } catch (err) {
+      alert("Failed to update lab: " + err.message);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteLab(deleteTarget.lab_id);
+    setLabs(prev => prev.filter(l => l.lab_id !== deleteTarget.lab_id));
+    setDeleteTarget(null);
   };
 
   const machineCountByLab = useMemo(() => {
@@ -203,13 +235,22 @@ export default function AdminLabsPage() {
                       <h3 className="text-base font-semibold text-slate-900 mt-1.5">{lab.name}</h3>
                       <p className="font-mono text-xs text-slate-400">{lab.lab_id}</p>
                     </div>
-                    <button
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Delete Lab"
-                      onClick={() => handleDelete(lab.lab_id, lab.name)}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+                        title="Edit Lab"
+                        onClick={() => handleOpenEdit(lab)}
+                      >
+                        <Edit2 size={15} />
+                      </button>
+                      <button
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Delete Lab"
+                        onClick={() => setDeleteTarget(lab)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2 text-xs text-slate-600 my-4 pt-3 border-t border-slate-100">
@@ -364,6 +405,111 @@ export default function AdminLabsPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Lab Modal */}
+      {editingLab && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-1">Edit Lab</h2>
+            <p className="text-xs text-slate-400 font-mono mb-4">{editForm.lab_id}</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="form-label">Lab Name <span className="text-red-500 font-bold">*</span></label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Department <span className="text-red-500 font-bold">*</span></label>
+                  <select
+                    className="form-select"
+                    value={editForm.department}
+                    onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))}
+                  >
+                    {departments.map(d => (
+                      <option key={d.department_id || d.code} value={d.department_id || d.code}>
+                        {d.department_id || d.code} – {d.name}
+                      </option>
+                    ))}
+                    {departments.length === 0 && (
+                      <>
+                        <option value="CSE">CSE</option>
+                        <option value="IT">IT</option>
+                        <option value="E&TC">E&TC</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Capacity (Seats)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min="1"
+                    max="200"
+                    value={editForm.capacity}
+                    onChange={e => setEditForm(f => ({ ...f, capacity: parseInt(e.target.value) || 30 }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Building <span className="text-red-500 font-bold">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editForm.building}
+                    onChange={e => setEditForm(f => ({ ...f, building: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Floor <span className="text-red-500 font-bold">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editForm.floor}
+                    onChange={e => setEditForm(f => ({ ...f, floor: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                className="btn-secondary"
+                onClick={() => setEditingLab(null)}
+                disabled={editSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSaveEdit}
+                disabled={!editForm.name.trim() || !editForm.department.trim() || editSubmitting}
+              >
+                {editSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title={`Delete Lab: ${deleteTarget?.name || deleteTarget?.lab_id}`}
+        message={`Are you sure you want to delete lab "${deleteTarget?.name}" (${deleteTarget?.lab_id})? This will remove the lab configuration and its timetable schedules.`}
+        confirmLabel="Delete Lab"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </PageWrapper>
   );
 }

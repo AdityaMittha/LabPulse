@@ -51,6 +51,14 @@ export async function addLab({ lab_id, name, building, floor, department, capaci
   return data;
 }
 
+export async function updateLab({ lab_id, name, building, floor, department, capacity }) {
+  const data = await apiFetch("/admin/labs", {
+    method: "PUT",
+    body: JSON.stringify({ lab_id, name, building, floor, department, capacity, is_edit: true }),
+  });
+  return data;
+}
+
 export async function deleteLab(labId) {
   const data = await apiFetch(`/admin/labs?lab_id=${encodeURIComponent(labId)}`, {
     method: "DELETE",
@@ -98,6 +106,14 @@ export async function addMachine({ machine_id, lab_id, hostname }) {
   return data;
 }
 
+export async function updateMachine({ machine_id, lab_id, hostname, status, regenerate_key }) {
+  const data = await apiFetch("/admin/machines", {
+    method: "PUT",
+    body: JSON.stringify({ machine_id, lab_id, hostname, status, regenerate_key, is_edit: true }),
+  });
+  return data;
+}
+
 export async function deleteMachine(machineId) {
   const data = await apiFetch(`/admin/machines?machine_id=${encodeURIComponent(machineId)}`, {
     method: "DELETE",
@@ -128,6 +144,24 @@ export async function addStudent({ student_id, name, college_login, pnr_no, pass
       password,
       department,
       year,
+    }),
+  });
+  return data;
+}
+
+export async function updateStudent({ student_id, name, college_login, pnr_no, password, department, year }) {
+  const finalId = (student_id || pnr_no || "").trim();
+  const data = await apiFetch("/admin/students", {
+    method: "PUT",
+    body: JSON.stringify({
+      student_id: finalId,
+      pnr_no: finalId,
+      name,
+      college_login,
+      password,
+      department,
+      year,
+      is_edit: true,
     }),
   });
   return data;
@@ -227,3 +261,32 @@ export async function fetchStudentBrowserActivity(studentId) {
     page_log: pageLog.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20),
   };
 }
+
+// ── Clipboard Utility ────────────────────────────────────────────────────────
+
+export async function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      console.warn("navigator.clipboard.writeText failed:", e);
+    }
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (err) {
+    console.error("Fallback copy failed:", err);
+    return false;
+  }
+}
+

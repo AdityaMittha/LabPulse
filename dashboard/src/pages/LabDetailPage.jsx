@@ -1,15 +1,16 @@
 import { useMemo, useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Monitor, Users, CheckCircle2, Activity, Globe } from "lucide-react";
+import { Monitor, Users, CheckCircle2, Activity, Globe, Edit2, Trash2 } from "lucide-react";
 import { todayStr, formatDuration } from "../data/mockData";
 import {
   StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper
 } from "../components/Shared";
-import { fetchUsage, fetchMachines, fetchTopSites, fetchLabs } from "../api/apiClient";
+import { fetchUsage, fetchMachines, fetchTopSites, fetchLabs, updateLab, deleteLab, fetchDepartments } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
+import ConfirmModal from "../components/ConfirmModal";
 
 // Heatmap: hour × day
 const HOURS = ["9","10","11","12","13","14","15","16","17"];
@@ -39,14 +40,23 @@ export default function LabDetailPage({ globalDate }) {
   const { user, isAdmin } = useAuth();
   const today = globalDate || todayStr();
 
+  const navigate = useNavigate();
   const [labInfo,        setLabInfo]        = useState(null);
   const [machinesData,   setMachinesData]   = useState([]);
   const [sessionsData,   setSessionsData]   = useState([]);
   const [allLabSessions, setAllLabSessions] = useState([]);
   const [topSitesData,   setTopSitesData]   = useState([]);
+  const [departments,    setDepartments]    = useState([]);
   const [selectedDate,   setSelectedDate]   = useState(today);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
+
+  // Edit & Delete state
+  const [showEdit,       setShowEdit]       = useState(false);
+  const [editForm,       setEditForm]       = useState({ name: "", department: "", building: "", floor: "", total_machines: 0 });
+  const [editSaving,     setEditSaving]     = useState(false);
+  const [editError,      setEditError]      = useState(null);
+  const [deleteModal,    setDeleteModal]    = useState({ open: false, loading: false, error: null });
 
   useEffect(() => {
     if (globalDate) setSelectedDate(globalDate);
@@ -57,7 +67,52 @@ export default function LabDetailPage({ globalDate }) {
     fetchLabs().then(labs => {
       setLabInfo(labs.find(l => l.lab_id === labId) || null);
     }).catch(() => setLabInfo(null));
+    fetchDepartments().then(setDepartments).catch(() => {});
   }, [labId]);
+
+  useEffect(() => {
+    if (labInfo) {
+      setEditForm({
+        name: labInfo.name || "",
+        department: labInfo.department || "",
+        building: labInfo.building || "",
+        floor: labInfo.floor || "",
+        total_machines: labInfo.total_machines || 0,
+      });
+    }
+  }, [labInfo]);
+
+  async function handleSaveEdit(e) {
+    e.preventDefault();
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updated = await updateLab(labId, {
+        name: editForm.name,
+        department: editForm.department,
+        building: editForm.building,
+        floor: editForm.floor,
+        total_machines: Number(editForm.total_machines),
+      });
+      setLabInfo(updated);
+      setShowEdit(false);
+    } catch (err) {
+      setEditError(err.message || "Failed to update lab");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    setDeleteModal(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      await deleteLab(labId);
+      setDeleteModal({ open: false, loading: false, error: null });
+      navigate("/admin/labs");
+    } catch (err) {
+      setDeleteModal(prev => ({ ...prev, loading: false, error: err.message || "Failed to delete lab" }));
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -181,6 +236,15 @@ export default function LabDetailPage({ globalDate }) {
           <p className="page-subtitle">{labInfo.building} · {labInfo.floor} Floor · {labInfo.department}</p>
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => setShowEdit(true)}
+              className="btn btn-secondary flex items-center gap-1.5 text-xs py-1.5"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              Edit Lab
+            </button>
+          )}
           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
             className="form-input text-xs py-1.5 w-36" max={today} />
         </div>
@@ -334,6 +398,133 @@ export default function LabDetailPage({ globalDate }) {
           </table>
         </div>
       </div>
+      {/* Danger Zone */}
+      {isAdmin && (
+        <div className="card p-6 border-red-200 bg-red-50/30 mt-8 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-red-700">Danger Zone</h3>
+              <p className="text-xs text-red-600/80 mt-0.5">
+                Permanently delete this lab and all associated timetable slots.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ open: true, loading: false, error: null })}
+              className="btn bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 text-xs px-4 py-2 self-start sm:self-auto shadow-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Lab
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.open}
+        title="Delete Lab"
+        message={`Are you sure you want to delete lab "${labInfo.name}" (${labId})? This action will remove the lab and its timetable schedule slots permanently.`}
+        confirmText="Yes, Delete Lab"
+        danger
+        isLoading={deleteModal.loading}
+        error={deleteModal.error}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ open: false, loading: false, error: null })}
+      />
+
+      {/* Edit Lab Modal */}
+      {showEdit && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <h3 className="font-semibold text-slate-800 text-base mb-4">Edit Lab — {labId}</h3>
+            {editError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+                {editError}
+              </div>
+            )}
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="form-label">Lab Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  className="form-input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Department</label>
+                  <select
+                    value={editForm.department}
+                    onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))}
+                    className="form-select"
+                  >
+                    {departments.map(d => (
+                      <option key={d.dept_id} value={d.name}>{d.name}</option>
+                    ))}
+                    {!departments.some(d => d.name === editForm.department) && (
+                      <option value={editForm.department}>{editForm.department}</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Total Machines</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editForm.total_machines}
+                    onChange={e => setEditForm(f => ({ ...f, total_machines: e.target.value }))}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Building</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.building}
+                    onChange={e => setEditForm(f => ({ ...f, building: e.target.value }))}
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Floor</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.floor}
+                    onChange={e => setEditForm(f => ({ ...f, floor: e.target.value }))}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEdit(false)}
+                  className="btn btn-secondary"
+                  disabled={editSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="btn btn-primary"
+                >
+                  {editSaving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

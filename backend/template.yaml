@@ -276,6 +276,7 @@ Resources:
         AllowMethods:
           - GET
           - POST
+          - PUT
           - DELETE
           - OPTIONS
         AllowHeaders:
@@ -394,9 +395,10 @@ Resources:
         - DynamoDBCrudPolicy: { TableName: !Ref LabsTable }
         - DynamoDBCrudPolicy: { TableName: !Ref DepartmentsTable }
         - DynamoDBCrudPolicy: { TableName: !Ref SessionsTable }
-        - DynamoDBReadPolicy: { TableName: !Ref AppUsageTable }
-        - DynamoDBReadPolicy: { TableName: !Ref BehaviorMetricsTable }
-        - DynamoDBReadPolicy: { TableName: !Ref HourlyReportsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref AppUsageTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref BehaviorMetricsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref HourlyReportsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref BrowserActivityTable }
       Events:
         MachinesGet:
           Type: HttpApi
@@ -410,6 +412,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/machines
             Method: POST
+        MachinesPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/machines
+            Method: PUT
         MachinesDelete:
           Type: HttpApi
           Properties:
@@ -428,6 +436,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/students
             Method: POST
+        StudentsPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/students
+            Method: PUT
         StudentsDelete:
           Type: HttpApi
           Properties:
@@ -464,6 +478,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/labs
             Method: POST
+        LabsPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/labs
+            Method: PUT
         LabsDelete:
           Type: HttpApi
           Properties:
@@ -482,6 +502,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/departments
             Method: POST
+        DepartmentsPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/departments
+            Method: PUT
         DepartmentsDelete:
           Type: HttpApi
           Properties:

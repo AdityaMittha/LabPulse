@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, Copy, Check, ChevronDown, ChevronRight, Monitor, Wifi, WifiOff, Server } from "lucide-react";
 import { MachineStatusBadge, PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchMachines, fetchLabs, addMachine, deleteMachine } from "../api/apiClient";
+import { fetchMachines, fetchLabs, addMachine, updateMachine, deleteMachine, copyToClipboard } from "../api/apiClient";
+import ConfirmModal from "../components/ConfirmModal";
 
 const STATUSES     = ["active", "inactive"];
 const STATUS_LABELS = { active: "Active Machines", inactive: "Inactive Machines" };
@@ -124,19 +125,51 @@ export default function AdminMachinesPage() {
     }
   };
 
-  const handleDelete = async id => {
-    if (!window.confirm(`Are you sure you want to delete machine "${id}"?\n\nThis will permanently delete this machine record and ALL of its associated sessions, app usages, and behavior metrics.`)) return;
+  const [editingMachine, setEditingMachine] = useState(null);
+  const [editForm, setEditForm] = useState({ machine_id: "", lab_id: "", hostname: "", status: "active", regenerate_key: false });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleOpenEdit = m => {
+    setEditingMachine(m);
+    setEditForm({
+      machine_id: m.machine_id,
+      lab_id: m.lab_id || (labs[0]?.lab_id || ""),
+      hostname: m.hostname || "",
+      status: m.status || "active",
+      regenerate_key: false,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.hostname.trim() || !editForm.lab_id.trim()) {
+      alert("Hostname and Lab are required.");
+      return;
+    }
+    setEditSubmitting(true);
     try {
-      await deleteMachine(id);
-      setMachines(prev => prev.filter(m => m.machine_id !== id));
-      alert("Machine and all associated data successfully deleted.");
+      const res = await updateMachine(editForm);
+      setMachines(prev => prev.map(m => m.machine_id === editingMachine.machine_id ? { ...m, ...editForm } : m));
+      if (res.api_key) {
+        setNewKey(res.api_key);
+      }
+      setEditingMachine(null);
     } catch (err) {
-      alert("Failed to delete machine: " + err.message);
+      alert("Failed to update machine: " + err.message);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
-  const copyKey = () => {
-    navigator.clipboard.writeText(newKey);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteMachine(deleteTarget.machine_id);
+    setMachines(prev => prev.filter(m => m.machine_id !== deleteTarget.machine_id));
+    setDeleteTarget(null);
+  };
+
+  const copyKey = async () => {
+    await copyToClipboard(newKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -359,11 +392,18 @@ export default function AdminMachinesPage() {
                                     </td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
-                                        <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="Edit">
+                                        <button
+                                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                                          title="Edit Machine"
+                                          onClick={() => handleOpenEdit(m)}
+                                        >
                                           <Edit2 size={12} />
                                         </button>
-                                        <button onClick={() => handleDelete(m.machine_id)}
-                                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" title="Remove">
+                                        <button
+                                          onClick={() => setDeleteTarget(m)}
+                                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                          title="Delete Machine & Erase Data"
+                                        >
                                           <Trash2 size={12} />
                                         </button>
                                       </div>
@@ -394,7 +434,7 @@ export default function AdminMachinesPage() {
         </div>
       )}
 
-      {/* Add Machine modal */}
+      {/* Add Machine Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
@@ -441,6 +481,69 @@ export default function AdminMachinesPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Machine Modal */}
+      {editingMachine && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-1">Edit Machine</h2>
+            <p className="text-xs text-slate-400 mb-4 font-mono">{editForm.machine_id}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="form-label">Lab <span className="text-red-500 font-bold ml-1">*</span></label>
+                <select className="form-select" value={editForm.lab_id}
+                  onChange={e => setEditForm(f => ({ ...f, lab_id: e.target.value }))}>
+                  {labs.map(l => <option key={l.lab_id} value={l.lab_id}>{l.name} ({l.lab_id})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Windows Hostname <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input className="form-input font-mono" value={editForm.hostname}
+                  onChange={e => setEditForm(f => ({ ...f, hostname: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label">Status</label>
+                <select className="form-select" value={editForm.status}
+                  onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.regenerate_key}
+                    onChange={e => setEditForm(f => ({ ...f, regenerate_key: e.target.checked }))}
+                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Regenerate API Key (will invalidate previous key)
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button className="btn-secondary" onClick={() => setEditingMachine(null)} disabled={editSubmitting}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={handleSaveEdit}
+                disabled={!editForm.hostname.trim() || !editForm.lab_id.trim() || editSubmitting}
+              >
+                {editSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title={`Delete Machine: ${deleteTarget?.machine_id}`}
+        message={`Are you sure you want to delete machine "${deleteTarget?.machine_id}" (${deleteTarget?.hostname})? This will permanently delete this machine record and erase ALL associated session history, app usage, and activity logs.`}
+        confirmLabel="Delete & Erase All Data"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </PageWrapper>
   );
 }

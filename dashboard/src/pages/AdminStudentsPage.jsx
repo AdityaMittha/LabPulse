@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Trash2, Edit2, ChevronDown, ChevronRight, Users, GraduationCap } from "lucide-react";
 import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
-import { fetchStudents, deleteStudent, addStudent, fetchDepartments } from "../api/apiClient";
+import { fetchStudents, deleteStudent, addStudent, updateStudent, fetchDepartments } from "../api/apiClient";
+import ConfirmModal from "../components/ConfirmModal";
 const YEARS = ["FE", "SE", "TE", "BE"];
 const YEAR_LABELS = { FE: "First Year", SE: "Second Year", TE: "Third Year", BE: "Final Year" };
 
@@ -142,16 +143,60 @@ export default function AdminStudentsPage() {
     }
   };
 
-  const handleDelete = async studentId => {
-    const studentName = students.find(s => s.student_id === studentId)?.name || studentId;
-    if (!window.confirm(`Are you sure you want to delete student "${studentName}"?\n\nThis will permanently delete this student record and ALL of their associated sessions, app usages, and behavior metrics.`)) return;
-    try {
-      await deleteStudent(studentId);
-      setStudents(prev => prev.filter(x => x.student_id !== studentId));
-      alert("Student and all associated data successfully deleted.");
-    } catch (err) {
-      alert("Failed to delete student: " + err.message);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleOpenEdit = (student) => {
+    const sId = student.student_id || student.pnr_no || "";
+    setEditingStudent(student);
+    setEditForm({
+      name: student.name || "",
+      student_id: sId,
+      pnr_no: sId,
+      password: "",
+      department: student.department || "CSE",
+      year: student.year || "BE",
+      college_login: student.college_login || "",
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    const nameVal = editForm.name.trim();
+    const emailVal = editForm.college_login.trim();
+    if (!nameVal || !emailVal) {
+      alert("Name and Email are compulsory.");
+      return;
     }
+    setEditSubmitting(true);
+    try {
+      await updateStudent(editForm);
+      setStudents(prev => prev.map(s => {
+        if (s.student_id === editingStudent.student_id) {
+          return {
+            ...s,
+            name: nameVal,
+            college_login: emailVal,
+            department: editForm.department,
+            year: editForm.year,
+          };
+        }
+        return s;
+      }));
+      setEditingStudent(null);
+    } catch (err) {
+      alert("Failed to update student: " + err.message);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteStudent(deleteTarget.student_id);
+    setStudents(prev => prev.filter(x => x.student_id !== deleteTarget.student_id));
+    setDeleteTarget(null);
   };
 
   const visibleDepts = deptFilter === "ALL" ? deptList : [deptFilter];
@@ -325,11 +370,18 @@ export default function AdminStudentsPage() {
                                     <td className="text-xs text-slate-400">{s.college_login}</td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
-                                        <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="Edit">
+                                        <button
+                                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                                          title="Edit Student"
+                                          onClick={() => handleOpenEdit(s)}
+                                        >
                                           <Edit2 size={12} />
                                         </button>
-                                        <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" title="Remove"
-                                          onClick={() => handleDelete(s.student_id)}>
+                                        <button
+                                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                          title="Delete Student & Erase Data"
+                                          onClick={() => setDeleteTarget(s)}
+                                        >
                                           <Trash2 size={12} />
                                         </button>
                                       </div>
@@ -422,6 +474,80 @@ export default function AdminStudentsPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Student modal */}
+      {editingStudent && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-slate-800 mb-1">Edit Student</h2>
+            <p className="text-xs text-slate-400 mb-4 font-mono">{editForm.student_id}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="form-label">Name <span className="text-red-500 font-bold">*</span></label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">Email <span className="text-red-500 font-bold">*</span></label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={editForm.college_login}
+                  onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">Password <span className="text-xs text-slate-400 font-normal">(Leave blank to keep unchanged)</span></label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="New password (optional)"
+                  value={editForm.password}
+                  onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Department <span className="text-red-500 font-bold">*</span></label>
+                  <select className="form-select" value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))}>
+                    {deptList.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Year <span className="text-red-500 font-bold">*</span></label>
+                  <select className="form-select" value={editForm.year} onChange={e => setEditForm(f => ({ ...f, year: e.target.value }))}>
+                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button className="btn-secondary" onClick={() => setEditingStudent(null)} disabled={editSubmitting}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={handleSaveEdit}
+                disabled={!editForm.name.trim() || !editForm.college_login.trim() || editSubmitting}
+              >
+                {editSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title={`Delete Student: ${deleteTarget?.name || deleteTarget?.student_id}`}
+        message={`Are you sure you want to delete student "${deleteTarget?.name}" (${deleteTarget?.student_id})? This will permanently delete this student record and erase ALL associated session history, app usage, and activity logs.`}
+        confirmLabel="Delete & Erase All Data"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </PageWrapper>
   );
 }

@@ -21,6 +21,7 @@ sessions_table       = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
 app_usage_table      = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
 behavior_table       = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
 hourly_reports_table = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
+browser_activity_table = dynamodb.Table(f"{TABLE_PREFIX}-BrowserActivity")
 
 
 def _cors(body, code=200):
@@ -42,7 +43,7 @@ def _generate_api_key() -> tuple[str, str]:
 
 
 def _cascade_delete_sessions(session_ids):
-    """Utility to delete sessions and all associated app usage, behavior metrics, and hourly reports."""
+    """Utility to delete sessions and all associated app usage, behavior metrics, browser activity, and hourly reports."""
     for sess_id in session_ids:
         # 1. Delete AppUsage
         try:
@@ -65,8 +66,19 @@ def _cascade_delete_sessions(session_ids):
                 behavior_table.delete_item(Key={"metric_id": metric["metric_id"]})
         except Exception as e:
             print(f"Error deleting BehaviorMetrics for session {sess_id}: {e}")
+
+        # 3. Delete BrowserActivity
+        try:
+            resp = browser_activity_table.query(
+                IndexName="by_session",
+                KeyConditionExpression=Key("session_id").eq(sess_id)
+            )
+            for act in resp.get("Items", []):
+                browser_activity_table.delete_item(Key={"activity_id": act["activity_id"]})
+        except Exception as e:
+            print(f"Error deleting BrowserActivity for session {sess_id}: {e}")
             
-        # 3. Delete from Sessions table
+        # 4. Delete from Sessions table
         try:
             sessions_table.delete_item(Key={"session_id": sess_id})
         except Exception as e:
@@ -74,7 +86,7 @@ def _cascade_delete_sessions(session_ids):
 
 
 def _delete_student_cascade(student_id):
-    """Cascade delete all student data: sessions, apps, metrics, hourly reports, and user profile."""
+    """Cascade delete all student data: sessions, apps, metrics, hourly reports, browser activity, and user profile."""
     # 1. Find all session IDs for student
     try:
         sessions_resp = sessions_table.query(
@@ -98,8 +110,19 @@ def _delete_student_cascade(student_id):
             hourly_reports_table.delete_item(Key={"report_id": report["report_id"]})
     except Exception as e:
         print(f"Error deleting HourlyReports for student {student_id}: {e}")
+
+    # 4. Delete BrowserActivity for student
+    try:
+        ba_resp = browser_activity_table.query(
+            IndexName="by_student_date",
+            KeyConditionExpression=Key("student_id").eq(student_id)
+        )
+        for act in ba_resp.get("Items", []):
+            browser_activity_table.delete_item(Key={"activity_id": act["activity_id"]})
+    except Exception as e:
+        print(f"Error deleting BrowserActivity for student {student_id}: {e}")
         
-    # 4. Delete the student profile
+    # 5. Delete the student profile
     students_table.delete_item(Key={"student_id": student_id})
 
 
@@ -130,6 +153,23 @@ def _delete_machine_cascade(machine_id):
         
     # 4. Delete the machine profile
     machines_table.delete_item(Key={"machine_id": machine_id})
+
+
+def _delete_lab_cascade(lab_id):
+    """Cascade delete lab: timetable slots and lab registration."""
+    # 1. Delete timetable slots for lab
+    try:
+        resp = timetable_table.query(
+            IndexName="by_lab",
+            KeyConditionExpression=Key("lab_id").eq(lab_id)
+        )
+        for s in resp.get("Items", []):
+            timetable_table.delete_item(Key={"slot_id": s["slot_id"]})
+    except Exception as e:
+        print(f"Error deleting timetable slots for lab {lab_id}: {e}")
+
+    # 2. Delete lab item
+    labs_table.delete_item(Key={"lab_id": lab_id})
 
 
 def lambda_handler(event, context):
@@ -172,10 +212,49 @@ def _handle_machines(method, body, event):
             resp = machines_table.scan()
         return _cors({"machines": resp.get("Items", [])})
 
-    if method == "POST":
-        machine_id = body.get("machine_id")
-        lab_id     = body.get("lab_id")
-        hostname   = body.get("hostname")
+    if method in ("POST", "PUT"):
+        machine_id     = (body.get("machine_id") or qs.get("machine_id") or "").strip()
+        lab_id         = (body.get("lab_id") or "").strip()
+        hostname       = (body.get("hostname") or "").strip()
+        status         = (body.get("status") or "active").strip()
+        regenerate_key = bool(body.get("regenerate_key", False))
+        is_edit        = method == "PUT" or bool(body.get("is_edit", False))
+
+        if not machine_id:
+            return _cors({"error": "machine_id required"}, 400)
+
+        existing = None
+        try:
+            resp = machines_table.get_item(Key={"machine_id": machine_id})
+            existing = resp.get("Item")
+        except Exception as e:
+            print(f"Error fetching machine {machine_id}: {e}")
+
+        if existing and is_edit:
+            update_lab = lab_id or existing.get("lab_id")
+            update_host = hostname or existing.get("hostname")
+            update_status = status or existing.get("status", "active")
+            
+            raw_key = None
+            key_hash = existing.get("api_key_hash")
+            if regenerate_key:
+                raw_key, key_hash = _generate_api_key()
+
+            item = {
+                **existing,
+                "lab_id":       update_lab,
+                "hostname":     update_host,
+                "status":       update_status,
+                "api_key_hash": key_hash,
+                "updated_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+            machines_table.put_item(Item=item)
+            res = {"machine_id": machine_id, "status": "updated"}
+            if raw_key:
+                res["api_key"] = raw_key
+                res["message"] = "New API key generated."
+            return _cors(res, 200)
+
         if not all([machine_id, lab_id, hostname]):
             return _cors({"error": "machine_id, lab_id, hostname required"}, 400)
 
@@ -184,12 +263,12 @@ def _handle_machines(method, body, event):
             "machine_id":   machine_id,
             "lab_id":       lab_id,
             "hostname":     hostname,
-            "status":       "active",
+            "status":       status or "active",
             "api_key_hash": key_hash,
             "last_seen_at": None,
             "created_at":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         })
-        return _cors({"machine_id": machine_id, "api_key": raw_key, "message": "Save this API key â€” it won't be shown again."}, 201)
+        return _cors({"machine_id": machine_id, "api_key": raw_key, "message": "Save this API key — it won't be shown again."}, 201)
 
     if method == "DELETE":
         machine_id = qs.get("machine_id") or body.get("machine_id")
@@ -215,15 +294,42 @@ def _handle_students(method, body, event):
                 it["pnr_no"] = val
         return _cors({"students": items})
 
-    if method == "POST":
-        student_id    = (body.get("student_id") or body.get("pnr_no") or "").strip()
+    if method in ("POST", "PUT"):
+        student_id    = (body.get("student_id") or body.get("pnr_no") or qs.get("student_id") or qs.get("pnr_no") or "").strip()
         pnr_no        = student_id
         name          = (body.get("name") or "").strip()
+        department    = (body.get("department") or "").strip()
+        year          = (body.get("year") or "").strip()
         college_login = (body.get("college_login") or "").strip()
         password      = (body.get("password") or "").strip()
+        is_edit       = method == "PUT" or bool(body.get("is_edit", False))
 
         if not student_id:
             return _cors({"error": "PNR No. (Student ID) is compulsory"}, 400)
+
+        existing = None
+        try:
+            resp = students_table.get_item(Key={"student_id": student_id})
+            existing = resp.get("Item")
+        except Exception as e:
+            print(f"Error fetching student {student_id}: {e}")
+
+        if existing and is_edit:
+            item = {
+                **existing,
+                "student_id":    student_id,
+                "pnr_no":        student_id,
+                "name":          name or existing.get("name"),
+                "department":    department or existing.get("department"),
+                "year":          year or existing.get("year"),
+                "college_login": college_login or existing.get("college_login"),
+                "updated_at":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+            if password:
+                item["password_hash"] = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
+            students_table.put_item(Item=item)
+            return _cors({"student_id": student_id, "pnr_no": student_id, "status": "updated"}, 200)
+
         if not password:
             return _cors({"error": "Password is compulsory for PC login"}, 400)
         if not name:
@@ -235,8 +341,8 @@ def _handle_students(method, body, event):
             "student_id":    student_id,
             "pnr_no":        student_id,  # student_id and pnr_no are identical
             "name":          name,
-            "department":    body.get("department", ""),
-            "year":          body.get("year", ""),
+            "department":    department,
+            "year":          year,
             "college_login": college_login,
             "role":          "student",
             "password_hash": "sha256:" + hashlib.sha256(password.encode()).hexdigest(),
@@ -314,15 +420,39 @@ def _handle_labs(method, body, event):
         resp = labs_table.scan()
         return _cors({"labs": resp.get("Items", [])})
 
-    if method == "POST":
-        lab_id     = (body.get("lab_id") or "").strip().upper()
+    if method in ("POST", "PUT"):
+        lab_id     = (body.get("lab_id") or qs.get("lab_id") or "").strip().upper()
         name       = (body.get("name") or "").strip()
         department = (body.get("department") or "").strip()
         building   = (body.get("building") or "").strip()
         floor      = (body.get("floor") or "").strip()
         capacity   = int(body.get("capacity") or 30)
+        is_edit    = method == "PUT" or bool(body.get("is_edit", False))
 
-        if not lab_id or not name or not department:
+        if not lab_id:
+            return _cors({"error": "lab_id is compulsory"}, 400)
+
+        existing = None
+        try:
+            resp = labs_table.get_item(Key={"lab_id": lab_id})
+            existing = resp.get("Item")
+        except Exception as e:
+            print(f"Error fetching lab {lab_id}: {e}")
+
+        if existing and is_edit:
+            item = {
+                **existing,
+                "name":       name or existing.get("name"),
+                "department": department or existing.get("department"),
+                "building":   building or existing.get("building"),
+                "floor":      floor or existing.get("floor"),
+                "capacity":   capacity or existing.get("capacity", 30),
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+            labs_table.put_item(Item=item)
+            return _cors({"lab_id": lab_id, "status": "updated"}, 200)
+
+        if not name or not department:
             return _cors({"error": "lab_id, name, and department are compulsory"}, 400)
 
         labs_table.put_item(Item={
@@ -340,7 +470,7 @@ def _handle_labs(method, body, event):
         lab_id = qs.get("lab_id") or body.get("lab_id")
         if not lab_id:
             return _cors({"error": "lab_id required"}, 400)
-        labs_table.delete_item(Key={"lab_id": lab_id})
+        _delete_lab_cascade(lab_id)
         return _cors({"status": "deleted"})
 
     return _cors({"error": "Method not allowed"}, 405)
