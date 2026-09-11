@@ -28,9 +28,10 @@ export default function AdminStudentsPage() {
   const [search,      setSearch]      = useState("");
   const [deptFilter,  setDeptFilter]  = useState("ALL");
   const [yearFilter,  setYearFilter]  = useState("ALL");
+  const [batchFilter, setBatchFilter] = useState("ALL");
   const [showAdd,     setShowAdd]     = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
-  const [form, setForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
+  const [form, setForm] = useState({ name: "", roll_no: "", student_id: "", pnr_no: "", batch: "", password: "", department: "CSE", year: "BE" });
 
   // CSV Import & Export State
   const [showCsvModal,     setShowCsvModal]     = useState(false);
@@ -76,6 +77,14 @@ export default function AdminStudentsPage() {
     return list.length > 0 ? list : ["CSE", "IT", "E&TC"];
   }, [departments, students]);
 
+  const batchList = useMemo(() => {
+    const set = new Set();
+    students.forEach(s => {
+      if (s.batch && s.batch.trim()) set.add(s.batch.trim().toUpperCase());
+    });
+    return Array.from(set).sort();
+  }, [students]);
+
   const [expandedDepts, setExpandedDepts] = useState(() => new Set());
   const [expandedYears, setExpandedYears] = useState(() => new Set());
 
@@ -105,10 +114,13 @@ export default function AdminStudentsPage() {
   const filtered = useMemo(() => students.filter(s =>
     (deptFilter === "ALL" || s.department === deptFilter) &&
     (yearFilter === "ALL" || s.year === yearFilter) &&
+    (batchFilter === "ALL" || (s.batch || "").toUpperCase() === batchFilter.toUpperCase()) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) ||
      s.student_id.toLowerCase().includes(search.toLowerCase()) ||
-     (s.pnr_no && s.pnr_no.toLowerCase().includes(search.toLowerCase())))
-  ), [students, deptFilter, yearFilter, search]);
+     (s.pnr_no && s.pnr_no.toLowerCase().includes(search.toLowerCase())) ||
+     (s.roll_no && s.roll_no.toLowerCase().includes(search.toLowerCase())) ||
+     (s.batch && s.batch.toLowerCase().includes(search.toLowerCase())))
+  ), [students, deptFilter, yearFilter, batchFilter, search]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -138,22 +150,26 @@ export default function AdminStudentsPage() {
     const idVal = (form.student_id || form.pnr_no || "").trim();
     const nameVal = form.name.trim();
     const passVal = form.password.trim();
-    const emailVal = form.college_login.trim();
+    const rollVal = (form.roll_no || "").trim();
+    const batchVal = (form.batch || "").trim().toUpperCase();
     if (!nameVal || !idVal || !passVal) {
       alert("Please enter Name, PNR No., and Password (compulsory).");
       return;
     }
-    if (emailVal && !emailVal.includes("@")) {
-      alert("Please enter a valid email address or leave it blank.");
-      return;
-    }
     setSubmitting(true);
     try {
-      const newStudent = { ...form, student_id: idVal, pnr_no: idVal, role: "student" };
+      const newStudent = {
+        ...form,
+        student_id: idVal,
+        pnr_no: idVal,
+        roll_no: rollVal,
+        batch: batchVal,
+        role: "student"
+      };
       await addStudent(newStudent);
       setStudents(prev => [...prev, newStudent]);
       setShowAdd(false);
-      setForm({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
+      setForm({ name: "", roll_no: "", student_id: "", pnr_no: "", batch: "", password: "", department: defaultDept || "CSE", year: defaultYear || "BE" });
     } catch (err) {
       alert("Failed to add student: " + err.message);
     } finally {
@@ -162,7 +178,7 @@ export default function AdminStudentsPage() {
   };
 
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "CSE", year: "BE", college_login: "" });
+  const [editForm, setEditForm] = useState({ name: "", roll_no: "", student_id: "", pnr_no: "", batch: "", password: "", department: "CSE", year: "BE" });
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -171,35 +187,34 @@ export default function AdminStudentsPage() {
     setEditingStudent(student);
     setEditForm({
       name: student.name || "",
+      roll_no: student.roll_no || "",
       student_id: sId,
       pnr_no: sId,
+      batch: student.batch || "",
       password: "",
       department: student.department || "CSE",
       year: student.year || "BE",
-      college_login: student.college_login || "",
     });
   };
 
   const handleSaveEdit = async () => {
     const nameVal = editForm.name.trim();
-    const emailVal = editForm.college_login.trim();
+    const rollVal = (editForm.roll_no || "").trim();
+    const batchVal = (editForm.batch || "").trim().toUpperCase();
     if (!nameVal) {
       alert("Name is compulsory.");
       return;
     }
-    if (emailVal && !emailVal.includes("@")) {
-      alert("Please enter a valid email address or leave it blank.");
-      return;
-    }
     setEditSubmitting(true);
     try {
-      await updateStudent(editForm);
+      await updateStudent({ ...editForm, roll_no: rollVal, batch: batchVal });
       setStudents(prev => prev.map(s => {
         if (s.student_id === editingStudent.student_id) {
           return {
             ...s,
             name: nameVal,
-            college_login: emailVal,
+            roll_no: rollVal,
+            batch: batchVal,
             department: editForm.department,
             year: editForm.year,
           };
@@ -226,11 +241,11 @@ export default function AdminStudentsPage() {
   const downloadSampleCsv = () => {
     const d = defaultDept || deptList[0] || "CSE";
     const csvContent = [
-      "student_id,name,college_login,department,year,password",
-      `2024${d}001,Aarav Sharma,aarav.sharma@college.ac.in,${d},BE,Welcome@123`,
-      `2024${d}002,Priya Patil,priya.patil@college.ac.in,${d},TE,Welcome@123`,
-      `2024${d}003,Rohan Kulkarni,rohan.kulkarni@college.ac.in,${d},SE,Welcome@123`,
-      `2024${d}004,Ananya Deshmukh,ananya.d@college.ac.in,${d},FE,Welcome@123`
+      "roll_no,student_id,name,batch,department,year,password",
+      `01,2024${d}001,Aarav Sharma,A1,${d},BE,Welcome@123`,
+      `02,2024${d}002,Priya Patil,A2,${d},TE,Welcome@123`,
+      `03,2024${d}003,Rohan Kulkarni,B1,${d},SE,Welcome@123`,
+      `04,2024${d}004,Ananya Deshmukh,B2,${d},FE,Welcome@123`
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -250,21 +265,24 @@ export default function AdminStudentsPage() {
       alert("No students to export.");
       return;
     }
-    const headers = "student_id,name,college_login,department,year";
+    const headers = "roll_no,student_id,name,batch,department,year";
     const rows = listToExport.map(s => {
+      const roll = (s.roll_no || "").replace(/"/g, '""');
       const sId = (s.student_id || s.pnr_no || "").replace(/"/g, '""');
       const name = (s.name || "").replace(/"/g, '""');
-      const email = (s.college_login || "").replace(/"/g, '""');
+      const batch = (s.batch || "").replace(/"/g, '""');
       const dept = (s.department || "").replace(/"/g, '""');
       const yr = (s.year || "").replace(/"/g, '""');
-      return `"${sId}","${name}","${email}","${dept}","${yr}"`;
+      return `"${roll}","${sId}","${name}","${batch}","${dept}","${yr}"`;
     });
     const csvContent = [headers, ...rows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const filterSuffix = deptFilter !== "ALL" || yearFilter !== "ALL" ? `_${deptFilter}_${yearFilter}` : "_all";
+    const filterSuffix = deptFilter !== "ALL" || yearFilter !== "ALL" || batchFilter !== "ALL"
+      ? `_${deptFilter}_${yearFilter}${batchFilter !== "ALL" ? `_${batchFilter}` : ""}`
+      : "_all";
     link.setAttribute("download", `students${filterSuffix}.csv`);
     document.body.appendChild(link);
     link.click();
@@ -294,10 +312,14 @@ export default function AdminStudentsPage() {
 
     const colMap = {};
     rawHeaders.forEach((header, index) => {
-      if (header.includes("pnr") || header.includes("student_id") || header.includes("prn") || header.includes("roll")) {
+      if (header.includes("roll") || header.includes("rno")) {
+        colMap.roll_no = index;
+      } else if (header.includes("pnr") || header.includes("student_id") || header.includes("prn")) {
         colMap.student_id = index;
       } else if (header.includes("name") || header.includes("fullname")) {
         colMap.name = index;
+      } else if (header.includes("batch") || header.includes("group") || header.includes("division") || header.includes("section")) {
+        colMap.batch = index;
       } else if (header.includes("email") || header.includes("login") || header.includes("mail")) {
         colMap.college_login = index;
       } else if (header.includes("dept") || header.includes("branch") || header.includes("department")) {
@@ -343,7 +365,9 @@ export default function AdminStudentsPage() {
       };
 
       const rawId = getVal("student_id");
+      const roll_no = getVal("roll_no");
       const name = getVal("name");
+      const batch = (getVal("batch") || "").toUpperCase();
       const email = getVal("college_login");
       const deptRaw = getVal("department");
       const yearRaw = getVal("year");
@@ -362,9 +386,6 @@ export default function AdminStudentsPage() {
       const errors = [];
       if (!student_id) errors.push("Missing Student ID / PNR No.");
       if (!name) errors.push("Missing Name.");
-      if (email && !email.includes("@")) {
-        errors.push("Invalid Email address format.");
-      }
       if (!YEARS.includes(year)) {
         errors.push(`Invalid Year (${year}). Expected FE, SE, TE, or BE.`);
       }
@@ -389,7 +410,9 @@ export default function AdminStudentsPage() {
         id: i,
         student_id,
         pnr_no: student_id,
+        roll_no,
         name,
+        batch,
         college_login: email,
         department,
         year,
@@ -451,8 +474,9 @@ export default function AdminStudentsPage() {
         const studentPayload = {
           student_id:    r.student_id,
           pnr_no:        r.pnr_no || r.student_id,
+          roll_no:       r.roll_no || "",
           name:          r.name,
-          college_login: r.college_login,
+          batch:         r.batch || "",
           password:      r.password,
           department:    r.department,
           year:          r.year,
@@ -589,6 +613,10 @@ export default function AdminStudentsPage() {
           <option value="ALL">All Years</option>
           {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
+        <select className="form-select w-28" value={batchFilter} onChange={e => setBatchFilter(e.target.value)}>
+          <option value="ALL">All Batches</option>
+          {batchList.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
         <button className="btn-secondary btn-sm text-xs"
           onClick={() => { setExpandedDepts(new Set(deptList)); setExpandedYears(new Set(deptList.flatMap(d => YEARS.map(y => `${d}-${y}`)))); }}>
           Expand All
@@ -665,22 +693,32 @@ export default function AdminStudentsPage() {
                             <table className="table">
                               <thead>
                                 <tr>
+                                  <th className="!text-[10px] !py-2 w-20">Roll No</th>
                                   <th className="!text-[10px] !py-2">Name</th>
                                   <th className="!text-[10px] !py-2">Student ID / PNR No.</th>
-                                  <th className="!text-[10px] !py-2">Email</th>
+                                  <th className="!text-[10px] !py-2">Batch</th>
                                   <th className="!text-[10px] !py-2 text-right">Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {yearStudents.map(s => (
                                   <tr key={s.student_id}>
+                                    <td className="font-mono text-xs font-semibold text-slate-700">{s.roll_no || "—"}</td>
                                     <td>
                                       <Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline text-sm">
                                         {s.name}
                                       </Link>
                                     </td>
-                                    <td className="font-mono text-xs font-semibold text-slate-700">{s.student_id || s.pnr_no}</td>
-                                    <td className="text-xs text-slate-400">{s.college_login || "—"}</td>
+                                    <td className="font-mono text-xs text-slate-500">{s.student_id || s.pnr_no}</td>
+                                    <td>
+                                      {s.batch ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-primary-50 text-primary-700 border border-primary-200">
+                                          {s.batch}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-slate-300">—</span>
+                                      )}
+                                    </td>
                                     <td>
                                       <div className="flex items-center justify-end gap-1">
                                         <button
@@ -731,34 +769,78 @@ export default function AdminStudentsPage() {
           <div className="bg-white rounded-xl w-full max-w-md p-6">
             <h2 className="text-base font-semibold text-slate-800 mb-4">Add Student</h2>
             <div className="space-y-3">
-              {[
-                ["Name", "name", "text", "Full name", true],
-                ["Student ID / PNR No.", "student_id", "text", "e.g. 2024WIT001 (used for ID & PC login)", true],
-                ["Password", "password", "password", "Password for PC login (compulsory)", true],
-                ["Email (Optional)", "college_login", "email", "name@college.ac.in (optional)", false],
-              ].map(([label, key, type, placeholder, compulsory]) => (
-                <div key={key}>
+              <div>
+                <label className="form-label">
+                  Name <span className="text-red-500 ml-1 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Full name"
+                  required
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="form-label">
-                    {label}
-                    {compulsory && <span className="text-red-500 ml-1 font-bold">*</span>}
+                    Roll No
                   </label>
                   <input
-                    type={type}
-                    className="form-input"
-                    placeholder={placeholder}
-                    required={compulsory}
-                    value={form[key]}
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (key === "student_id") {
-                        setForm(f => ({ ...f, student_id: val, pnr_no: val }));
-                      } else {
-                        setForm(f => ({ ...f, [key]: val }));
-                      }
-                    }}
+                    type="text"
+                    className="form-input font-mono"
+                    placeholder="e.g. 01, 45"
+                    value={form.roll_no}
+                    onChange={e => setForm(f => ({ ...f, roll_no: e.target.value }))}
                   />
                 </div>
-              ))}
+                <div>
+                  <label className="form-label">
+                    Batch
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input font-mono uppercase"
+                    placeholder="e.g. A1, A2, B1"
+                    value={form.batch}
+                    onChange={e => setForm(f => ({ ...f, batch: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label">
+                  Student ID / PNR No. <span className="text-red-500 ml-1 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. 2024WIT001 (used for ID & PC login)"
+                  required
+                  value={form.student_id}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setForm(f => ({ ...f, student_id: val, pnr_no: val }));
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="form-label">
+                  Password <span className="text-red-500 ml-1 font-bold">*</span>
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Password for PC login (compulsory)"
+                  required
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="form-label">Department <span className="text-red-500 font-bold">*</span></label>
@@ -804,15 +886,27 @@ export default function AdminStudentsPage() {
                   onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
-              <div>
-                <label className="form-label">Email <span className="text-xs text-slate-400 font-normal">(Optional)</span></label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="name@college.ac.in (optional)"
-                  value={editForm.college_login}
-                  onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Roll No</label>
+                  <input
+                    type="text"
+                    className="form-input font-mono"
+                    placeholder="e.g. 01, 45"
+                    value={editForm.roll_no}
+                    onChange={e => setEditForm(f => ({ ...f, roll_no: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Batch</label>
+                  <input
+                    type="text"
+                    className="form-input font-mono uppercase"
+                    placeholder="e.g. A1, A2, B1"
+                    value={editForm.batch}
+                    onChange={e => setEditForm(f => ({ ...f, batch: e.target.value.toUpperCase() }))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="form-label">Password <span className="text-xs text-slate-400 font-normal">(Leave blank to keep unchanged)</span></label>
@@ -998,9 +1092,10 @@ export default function AdminStudentsPage() {
                 <table className="w-full text-xs text-left">
                   <thead className="bg-slate-50/50 text-slate-500 border-b border-slate-100 font-semibold">
                     <tr>
-                      <th className="p-2">Student ID / PNR</th>
+                      <th className="p-2 w-16">Roll No</th>
                       <th className="p-2">Name</th>
-                      <th className="p-2">Email</th>
+                      <th className="p-2">Student ID / PNR</th>
+                      <th className="p-2">Batch</th>
                       <th className="p-2">Dept</th>
                       <th className="p-2">Year</th>
                       <th className="p-2">Status</th>
@@ -1009,9 +1104,18 @@ export default function AdminStudentsPage() {
                   <tbody className="divide-y divide-slate-100">
                     {parsedRows.map((r) => (
                       <tr key={r.id} className={r.isValid ? "hover:bg-slate-50/50" : "bg-red-50/40"}>
-                        <td className="p-2 font-mono font-bold text-slate-700">{r.student_id || "—"}</td>
+                        <td className="p-2 font-mono font-bold text-slate-700">{r.roll_no || "—"}</td>
                         <td className="p-2 font-medium text-slate-800">{r.name || "—"}</td>
-                        <td className="p-2 text-slate-500">{r.college_login || "—"}</td>
+                        <td className="p-2 font-mono text-slate-600">{r.student_id || "—"}</td>
+                        <td className="p-2">
+                          {r.batch ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 border border-primary-200">
+                              {r.batch}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                         <td className="p-2 font-semibold text-slate-600">{r.department}</td>
                         <td className="p-2">
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${YEAR_COLORS[r.year] || "bg-slate-100"}`}>

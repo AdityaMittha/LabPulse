@@ -19,7 +19,7 @@ export default function StudentDetailPage() {
   const [error,          setError]          = useState(null);
 
   const [showEdit,       setShowEdit]       = useState(false);
-  const [editForm,       setEditForm]       = useState({ name: "", student_id: "", pnr_no: "", password: "", department: "", year: "", college_login: "" });
+  const [editForm,       setEditForm]       = useState({ name: "", roll_no: "", student_id: "", pnr_no: "", batch: "", password: "", department: "", year: "" });
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -124,7 +124,9 @@ export default function StudentDetailPage() {
           </div>
           <div>
             <h1 className="page-title">{student.name}</h1>
-            <p className="page-subtitle">{student.student_id} · {student.department} · {student.year}{student.college_login ? ` · ${student.college_login}` : ""}</p>
+            <p className="page-subtitle">
+              Roll No: {student.roll_no || "—"} · PNR: {student.student_id} · Batch: {student.batch || "—"} · {student.department} · {student.year}
+            </p>
           </div>
         </div>
         <button
@@ -132,12 +134,13 @@ export default function StudentDetailPage() {
           onClick={() => {
             setEditForm({
               name: student.name || "",
+              roll_no: student.roll_no || "",
               student_id: student.student_id || student.pnr_no || "",
               pnr_no: student.student_id || student.pnr_no || "",
+              batch: student.batch || "",
               password: "",
               department: student.department || "CSE",
               year: student.year || "BE",
-              college_login: student.college_login || "",
             });
             setShowEdit(true);
           }}
@@ -351,15 +354,27 @@ export default function StudentDetailPage() {
                   onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
-              <div>
-                <label className="form-label">Email <span className="text-xs text-slate-400 font-normal">(Optional)</span></label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="name@college.ac.in (optional)"
-                  value={editForm.college_login}
-                  onChange={e => setEditForm(f => ({ ...f, college_login: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Roll No</label>
+                  <input
+                    type="text"
+                    className="form-input font-mono"
+                    placeholder="e.g. 01, 45"
+                    value={editForm.roll_no}
+                    onChange={e => setEditForm(f => ({ ...f, roll_no: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Batch</label>
+                  <input
+                    type="text"
+                    className="form-input font-mono uppercase"
+                    placeholder="e.g. A1, A2, B1"
+                    value={editForm.batch}
+                    onChange={e => setEditForm(f => ({ ...f, batch: e.target.value.toUpperCase() }))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="form-label">Password <span className="text-xs text-slate-400 font-normal">(Leave blank to keep unchanged)</span></label>
@@ -401,14 +416,15 @@ export default function StudentDetailPage() {
                     alert("Name is required.");
                     return;
                   }
-                  if (editForm.college_login.trim() && !editForm.college_login.includes("@")) {
-                    alert("Please enter a valid email address or leave it blank.");
-                    return;
-                  }
                   setEditSubmitting(true);
                   try {
-                    await updateStudent(editForm);
-                    setStudent(prev => ({ ...prev, ...editForm }));
+                    const payload = {
+                      ...editForm,
+                      roll_no: (editForm.roll_no || "").trim(),
+                      batch: (editForm.batch || "").trim().toUpperCase(),
+                    };
+                    await updateStudent(payload);
+                    setStudent(prev => ({ ...prev, ...payload }));
                     setShowEdit(false);
                   } catch (err) {
                     alert("Failed to update student: " + err.message);

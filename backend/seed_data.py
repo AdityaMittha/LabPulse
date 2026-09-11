@@ -68,12 +68,14 @@ print("\nSUCCESS: API keys saved to machine_api_keys.json (DO NOT commit to git!
 # â”€â”€ Students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 print("=== Seeding Students ===")
 STUDENTS = [
-    {"student_id": f"CS2024{i:03d}", "name": f"Student {i}", "department": "CSE", "year": "BE",
-     "college_login": f"student{i}@wit.ac.in", "role": "student"}
+    {"student_id": f"CS2024{i:03d}", "pnr_no": f"CS2024{i:03d}", "roll_no": f"{i:02d}",
+     "name": f"Student {i}", "department": "CSE", "year": "BE",
+     "batch": "A1" if i <= 15 else "A2", "role": "student"}
     for i in range(1, 31)
 ] + [
-    {"student_id": f"IT2024{i:03d}", "name": f"IT Student {i}", "department": "IT", "year": "BE",
-     "college_login": f"itstudent{i}@wit.ac.in", "role": "student"}
+    {"student_id": f"IT2024{i:03d}", "pnr_no": f"IT2024{i:03d}", "roll_no": f"{i:02d}",
+     "name": f"IT Student {i}", "department": "IT", "year": "BE",
+     "batch": "B1" if i <= 10 else "B2", "role": "student"}
     for i in range(1, 21)
 ]
 

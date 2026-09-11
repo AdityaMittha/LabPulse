@@ -132,7 +132,7 @@ export async function fetchStudents() {
   });
 }
 
-export async function addStudent({ student_id, name, college_login, pnr_no, password, department, year }) {
+export async function addStudent({ student_id, name, roll_no, batch, college_login, pnr_no, password, department, year }) {
   const finalId = (student_id || pnr_no || "").trim();
   const data = await apiFetch("/admin/students", {
     method: "POST",
@@ -140,6 +140,8 @@ export async function addStudent({ student_id, name, college_login, pnr_no, pass
       student_id: finalId,
       pnr_no: finalId,
       name,
+      roll_no: (roll_no || "").trim(),
+      batch: (batch || "").trim().toUpperCase(),
       college_login,
       password,
       department,
@@ -149,7 +151,7 @@ export async function addStudent({ student_id, name, college_login, pnr_no, pass
   return data;
 }
 
-export async function updateStudent({ student_id, name, college_login, pnr_no, password, department, year }) {
+export async function updateStudent({ student_id, name, roll_no, batch, college_login, pnr_no, password, department, year }) {
   const finalId = (student_id || pnr_no || "").trim();
   const data = await apiFetch("/admin/students", {
     method: "PUT",
@@ -157,6 +159,8 @@ export async function updateStudent({ student_id, name, college_login, pnr_no, p
       student_id: finalId,
       pnr_no: finalId,
       name,
+      roll_no: (roll_no || "").trim(),
+      batch: (batch || "").trim().toUpperCase(),
       college_login,
       password,
       department,

@@ -300,6 +300,8 @@ def _handle_students(method, body, event):
         name          = (body.get("name") or "").strip()
         department    = (body.get("department") or "").strip()
         year          = (body.get("year") or "").strip()
+        roll_no       = (body.get("roll_no") or "").strip()
+        batch         = (body.get("batch") or body.get("student_group") or "").strip().upper()
         college_login = (body.get("college_login") or "").strip()
         password      = (body.get("password") or "").strip()
         is_edit       = method == "PUT" or bool(body.get("is_edit", False))
@@ -320,6 +322,8 @@ def _handle_students(method, body, event):
                 "student_id":    student_id,
                 "pnr_no":        student_id,
                 "name":          name or existing.get("name"),
+                "roll_no":       roll_no if "roll_no" in body else existing.get("roll_no", ""),
+                "batch":         batch if ("batch" in body or "student_group" in body) else existing.get("batch", ""),
                 "department":    department or existing.get("department"),
                 "year":          year or existing.get("year"),
                 "college_login": college_login if "college_login" in body else existing.get("college_login", ""),
@@ -328,7 +332,7 @@ def _handle_students(method, body, event):
             if password:
                 item["password_hash"] = "sha256:" + hashlib.sha256(password.encode()).hexdigest()
             students_table.put_item(Item=item)
-            return _cors({"student_id": student_id, "pnr_no": student_id, "status": "updated"}, 200)
+            return _cors({"student_id": student_id, "pnr_no": student_id, "roll_no": item.get("roll_no", ""), "batch": item.get("batch", ""), "status": "updated"}, 200)
 
         if not password:
             return _cors({"error": "Password is compulsory for PC login"}, 400)
@@ -339,6 +343,8 @@ def _handle_students(method, body, event):
             "student_id":    student_id,
             "pnr_no":        student_id,  # student_id and pnr_no are identical
             "name":          name,
+            "roll_no":       roll_no,
+            "batch":         batch,
             "department":    department,
             "year":          year,
             "college_login": college_login or "",
@@ -348,7 +354,7 @@ def _handle_students(method, body, event):
         }
 
         students_table.put_item(Item=item)
-        return _cors({"student_id": student_id, "pnr_no": student_id, "status": "created"}, 201)
+        return _cors({"student_id": student_id, "pnr_no": student_id, "roll_no": roll_no, "batch": batch, "status": "created"}, 201)
 
     if method == "DELETE":
         student_id = qs.get("student_id") or body.get("student_id")

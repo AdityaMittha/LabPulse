@@ -85,16 +85,17 @@ def _normalize_year(yr: str) -> str:
     return y
 
 
-def _find_timetable_slot(lab_id: str, student_year: str = "") -> str:
+def _find_timetable_slot(lab_id: str, student_year: str = "", student_batch: str = "") -> str:
     """Return the active timetable slot_id for the lab at the current time.
     Supports minute-level precision, allows a 15-minute early check-in window,
-    and prioritizes slots matching the student's academic year (FY, SY, TY, BE).
+    and prioritizes slots matching the student's academic year and batch.
     """
     now = time.gmtime()
     day_map = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     day = day_map[now.tm_wday]
     current_mins = now.tm_hour * 60 + now.tm_min
     std_norm = _normalize_year(student_year)
+    batch_norm = (student_batch or "").strip().upper()
 
     resp = timetable_table.query(
         IndexName="by_lab",
@@ -119,7 +120,22 @@ def _find_timetable_slot(lab_id: str, student_year: str = "") -> str:
     if not matching_slots:
         return "NONE"
 
-    # Prioritize slot explicitly matching the student's year/batch
+    # Prioritize slot explicitly matching both the student's year and batch
+    if std_norm and batch_norm:
+        for s in matching_slots:
+            slot_year = _normalize_year(s.get("year", ""))
+            slot_group = (s.get("student_group", "") or "").upper()
+            if slot_year == std_norm and (batch_norm in slot_group or slot_group in ("ALL", "")):
+                return s["slot_id"]
+
+    # Next prioritize slot matching student's batch
+    if batch_norm:
+        for s in matching_slots:
+            slot_group = (s.get("student_group", "") or "").upper()
+            if batch_norm in slot_group:
+                return s["slot_id"]
+
+    # Next prioritize slot matching student's year
     if std_norm:
         for s in matching_slots:
             if _normalize_year(s.get("year", "")) == std_norm:
@@ -187,18 +203,22 @@ def lambda_handler(event, context):
     if stored_hash and not _verify_password(password, stored_hash):
         return _cors({"error": "Incorrect password."}, 401)
 
-    student_id = student["student_id"]
+    student_id   = student["student_id"]
     student_name = student.get("name", "")
+    roll_no      = student.get("roll_no", "")
+    batch        = student.get("batch", "")
 
     # Create session record
     session_id     = str(uuid.uuid4())
     login_time     = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    timetable_slot = _find_timetable_slot(lab_id, student.get("year", ""))
+    timetable_slot = _find_timetable_slot(lab_id, student.get("year", ""), batch)
 
     sessions_table.put_item(Item={
         "session_id":        session_id,
         "student_id":        student_id,
         "student_name":      student_name,
+        "roll_no":           roll_no,
+        "batch":             batch,
         "machine_id":        machine_id,
         "lab_id":            lab_id,
         "login_time":        login_time,
@@ -223,6 +243,8 @@ def lambda_handler(event, context):
         "session_id":     session_id,
         "student_id":     student_id,
         "student_name":   student_name,
+        "roll_no":        roll_no,
+        "batch":          batch,
         "session_token":  session_token,
         "timetable_slot": timetable_slot,
         "login_time":     login_time,
