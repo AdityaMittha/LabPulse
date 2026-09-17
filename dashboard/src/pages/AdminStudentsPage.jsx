@@ -4,8 +4,19 @@ import { PageWrapper } from "../components/Shared";
 import { Link } from "react-router-dom";
 import { fetchStudents, deleteStudent, addStudent, updateStudent, fetchDepartments } from "../api/apiClient";
 import ConfirmModal from "../components/ConfirmModal";
+import { normalizeYear } from "../data/collegeConfig";
+
 const YEARS = ["FE", "SE", "TE", "BE"];
-const YEAR_LABELS = { FE: "First Year", SE: "Second Year", TE: "Third Year", BE: "Final Year" };
+const YEAR_LABELS = { FE: "First Year (FE/FY)", SE: "Second Year (SE/SY)", TE: "Third Year (TE/TY)", BE: "Final Year (BE)" };
+
+const mapToYearCode = (yr) => {
+  const norm = normalizeYear(yr);
+  if (norm === "FY") return "FE";
+  if (norm === "SY") return "SE";
+  if (norm === "TY") return "TE";
+  if (norm === "BE") return "BE";
+  return norm || "BE";
+};
 
 const DEPT_COLORS = {
   CSE:    { bg: "bg-slate-50",   border: "border-slate-200",  accent: "bg-slate-600",   text: "text-slate-700",   ring: "ring-slate-300" },
@@ -113,7 +124,7 @@ export default function AdminStudentsPage() {
 
   const filtered = useMemo(() => students.filter(s =>
     (deptFilter === "ALL" || s.department === deptFilter) &&
-    (yearFilter === "ALL" || s.year === yearFilter) &&
+    (yearFilter === "ALL" || mapToYearCode(s.year) === mapToYearCode(yearFilter)) &&
     (batchFilter === "ALL" || (s.batch || "").toUpperCase() === batchFilter.toUpperCase()) &&
     (s.name.toLowerCase().includes(search.toLowerCase()) ||
      s.student_id.toLowerCase().includes(search.toLowerCase()) ||
@@ -129,12 +140,13 @@ export default function AdminStudentsPage() {
       YEARS.forEach(y => { map[d][y] = []; });
     });
     filtered.forEach(s => {
+      const yCode = mapToYearCode(s.year);
       if (!map[s.department]) {
         map[s.department] = {};
         YEARS.forEach(y => { map[s.department][y] = []; });
       }
-      if (map[s.department][s.year]) {
-        map[s.department][s.year].push(s);
+      if (map[s.department][yCode]) {
+        map[s.department][yCode].push(s);
       }
     });
     return map;

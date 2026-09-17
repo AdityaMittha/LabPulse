@@ -1,7 +1,7 @@
 // Shared reusable components for LabPulse dashboard
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-// â”€â”€ Stat Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, sub, trend, icon: Icon, color = "blue" }) {
   return (
     <div className="stat-card">
@@ -27,15 +27,18 @@ export function StatCard({ label, value, sub, trend, icon: Icon, color = "blue" 
   );
 }
 
-// â”€â”€ Compliance Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Compliance Badge ──────────────────────────────────────────────────────────
 export function ComplianceBadge({ status }) {
   const map = {
-    compliant:     { cls: "badge-success", label: "âœ“ Compliant" },
+    compliant:     { cls: "badge-success", label: "✓ Compliant" },
     partial:       { cls: "badge-warning", label: "~ Partial" },
-    non_compliant: { cls: "badge-danger",  label: "âœ— Absent" },
-    no_slot:       { cls: "badge-gray",    label: "No Slot" },
+    non_compliant: { cls: "badge-danger",  label: "✕ Non-Compliant" },
+    absent:        { cls: "badge-danger",  label: "✕ Absent" },
+    pending:       { cls: "badge-blue",    label: "⏳ In Progress" },
+    open_access:   { cls: "badge-gray",    label: "— Open Access" },
+    no_slot:       { cls: "badge-gray",    label: "— Open Access" },
   };
-  const m = map[status] || map.no_slot;
+  const m = map[status] || { cls: "badge-gray", label: status || "Unknown" };
   return <span className={m.cls}>{m.label}</span>;
 }
 
@@ -88,7 +91,7 @@ export function MachineStatusBadge({ status, machine, activeSessions }) {
   return <span className={m.cls}>{m.label}</span>;
 }
 
-// â”€â”€ Utilization Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Utilization Bar ──────────────────────────────────────────────────────────
 export function UtilBar({ pct, showLabel = true }) {
   const color = pct >= 75 ? "bg-primary-600" : pct >= 40 ? "bg-amber-400" : "bg-slate-300";
   return (
@@ -101,7 +104,7 @@ export function UtilBar({ pct, showLabel = true }) {
   );
 }
 
-// â”€â”€ Section heading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Section heading ──────────────────────────────────────────────────────────
 export function SectionHeading({ title, action }) {
   return (
     <div className="flex items-center justify-between mb-4">
@@ -111,7 +114,7 @@ export function SectionHeading({ title, action }) {
   );
 }
 
-// â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Empty state ──────────────────────────────────────────────────────────────
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-4">
@@ -123,7 +126,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   );
 }
 
-// â”€â”€ Skeleton loaders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Skeleton loaders ──────────────────────────────────────────────────────────
 export function SkeletonCard() {
   return (
     <div className="stat-card animate-pulse">
@@ -153,12 +156,12 @@ export function SkeletonTable({ rows = 5, cols = 4 }) {
   );
 }
 
-// â”€â”€ Page wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Page wrapper ──────────────────────────────────────────────────────────────
 export function PageWrapper({ children }) {
   return <div className="p-6 max-w-[1400px] mx-auto">{children}</div>;
 }
 
-// â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Format helpers ────────────────────────────────────────────────────────────
 export function formatDuration(seconds) {
   if (!seconds || seconds < 60) return `${seconds || 0}s`;
   const m = Math.floor(seconds / 60);
@@ -167,8 +170,9 @@ export function formatDuration(seconds) {
 }
 
 export function formatDate(isoStr) {
-  if (!isoStr) return "â€”";
+  if (!isoStr) return "—";
   return new Date(isoStr).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });

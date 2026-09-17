@@ -417,9 +417,9 @@ export default function AdminMachinesPage() {
                                     <td><MachineStatusBadge machine={m} activeSessions={activeSessions} /></td>
                                     <td className="text-xs text-slate-400">
                                       {m.last_seen_at
-                                        ? new Date(m.last_seen_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) +
-                                          (new Date(m.last_seen_at).toDateString() !== new Date().toDateString()
-                                            ? ` (${new Date(m.last_seen_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })})`
+                                        ? new Date(m.last_seen_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }) +
+                                          (new Date(m.last_seen_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) !== new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+                                            ? ` (${new Date(m.last_seen_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "short", day: "numeric" })})`
                                             : "")
                                         : "Never"}
                                     </td>

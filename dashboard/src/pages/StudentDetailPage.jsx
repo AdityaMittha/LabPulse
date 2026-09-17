@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { User, Clock, Monitor, CheckCircle2, Activity, Globe, ExternalLink, Edit2 } from "lucide-react";
-import { formatDuration } from "../data/mockData";
+import { formatDuration, formatTimeIST } from "../data/collegeConfig";
 import { StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
 import { fetchUsage, fetchStudents, fetchStudentBrowserActivity, deleteStudent, updateStudent, fetchLabs } from "../api/apiClient";
 import ConfirmModal from "../components/ConfirmModal";
@@ -23,32 +23,54 @@ export default function StudentDetailPage() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  const [lastUpdated,    setLastUpdated]    = useState(new Date());
 
-    Promise.all([
+  const loadData = (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    return Promise.all([
       fetchStudents(),
       fetchUsage({ student_id: studentId }),
       fetchStudentBrowserActivity(studentId),
       fetchLabs(),
     ]).then(([students, sess, browser, labs]) => {
-      if (!active) return;
       setStudent(students.find(s => s.student_id === studentId) || null);
-      setSessions(sess.sort((a, b) => new Date(b.login_time) - new Date(a.login_time)));
-      setBrowserData(browser);
+      setSessions((sess || []).sort((a, b) => new Date(b.login_time) - new Date(a.login_time)));
+      setBrowserData(browser || { sites: [], page_log: [] });
       const map = {};
-      labs.forEach(l => { map[l.lab_id] = l; });
+      (labs || []).forEach(l => { map[l.lab_id] = l; });
       setLabsMap(map);
-      setLoading(false);
+      setLastUpdated(new Date());
+      if (!silent) setLoading(false);
     }).catch(err => {
       console.error("StudentDetailPage fetch error:", err);
-      if (active) { setError(err.message); setLoading(false); }
+      if (!silent) {
+        setError(err.message);
+        setLoading(false);
+      }
     });
+  };
 
-    return () => { active = false; };
+  useEffect(() => {
+    loadData(false);
+    // Poll every 10 seconds for real-time telemetry (app usage, browser, active duration)
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [studentId]);
+
+  const activeSession = useMemo(() => sessions.find(s => !s.logout_time), [sessions]);
+
+  const getSessionDuration = (s) => {
+    if (!s.logout_time) {
+      const liveSecs = Math.max(0, Math.floor((Date.now() - new Date(s.login_time).getTime()) / 1000));
+      return Math.max(Number(s.total_duration || 0), liveSecs);
+    }
+    return Number(s.total_duration || 0);
+  };
 
   const complianceCount = useMemo(() => ({
     compliant:     sessions.filter(s => s.compliance_status === "compliant").length,
@@ -56,10 +78,14 @@ export default function StudentDetailPage() {
     non_compliant: sessions.filter(s => s.compliance_status === "non_compliant").length,
   }), [sessions]);
 
-  const compliancePct = sessions.length > 0
-    ? Math.round((complianceCount.compliant / sessions.length) * 100) : 0;
+  const compliancePct = useMemo(() => {
+    const scheduled = sessions.filter(s => s.compliance_status && !["open_access", "no_slot", "pending"].includes(s.compliance_status));
+    return scheduled.length > 0
+      ? Math.round((complianceCount.compliant / scheduled.length) * 100)
+      : (sessions.length > 0 ? 100 : 0);
+  }, [sessions, complianceCount]);
 
-  const totalTime = sessions.reduce((a, s) => a + (s.total_duration || 0), 0);
+  const totalTime = useMemo(() => sessions.reduce((a, s) => a + getSessionDuration(s), 0), [sessions]);
 
   // Per-day session count for bar chart
   const dailyData = useMemo(() => {
@@ -70,18 +96,20 @@ export default function StudentDetailPage() {
       .map(([date, count]) => ({ date: date.slice(5), count }));
   }, [sessions]);
 
-  // Top apps aggregated from session app_usages if available
+  // Top apps aggregated from session app_usages with real-time support
   const topApps = useMemo(() => {
     const map = {};
     sessions.forEach(s => {
       (s.app_usages || []).forEach(a => {
-        map[a.app_name] = (map[a.app_name] || 0) + (a.active_duration || 0);
+        const rawName = a.app_name || "";
+        if (!rawName) return;
+        map[rawName] = (map[rawName] || 0) + Number(a.active_duration || 0);
       });
     });
     return Object.entries(map)
-      .map(([name, dur]) => ({ name: name.replace(".exe", ""), dur }))
+      .map(([name, dur]) => ({ name: name.replace(/\.exe$/i, ""), rawName: name, dur }))
       .sort((a, b) => b.dur - a.dur)
-      .slice(0, 5);
+      .slice(0, 8);
   }, [sessions]);
 
   if (loading) {
@@ -123,7 +151,20 @@ export default function StudentDetailPage() {
             {student.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
           </div>
           <div>
-            <h1 className="page-title">{student.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="page-title">{student.name}</h1>
+              {activeSession ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Active Now ({activeSession.machine_id})
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] text-slate-500 bg-slate-100/80 border border-slate-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Real-time Sync Active
+                </span>
+              )}
+            </div>
             <p className="page-subtitle">
               Roll No: {student.roll_no || "—"} · PNR: {student.student_id} · Batch: {student.batch || "—"} · {student.department} · {student.year}
             </p>
@@ -200,20 +241,29 @@ export default function StudentDetailPage() {
 
           {/* Top apps */}
           <div className="card card-body">
-            <SectionHeading title="Top Apps Used" />
-            <div className="space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <SectionHeading title="Top Apps Used" />
+              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Real-Time
+              </span>
+            </div>
+            <div className="space-y-2.5">
               {topApps.length === 0
                 ? <p className="text-sm text-slate-400 text-center py-4">No app usage data available</p>
                 : topApps.map((app, i) => {
-                  const maxDur = topApps[0].dur;
+                  const maxDur = topApps[0].dur || 1;
+                  const totalAppTime = topApps.reduce((acc, a) => acc + a.dur, 0) || 1;
+                  const pct = Math.round((app.dur / totalAppTime) * 100);
                   return (
                     <div key={app.name} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400 w-4">{i+1}</span>
-                      <span className="text-sm text-slate-700 flex-1 truncate">{app.name}</span>
-                      <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(app.dur/maxDur)*100}%` }} />
+                      <span className="text-xs font-mono text-slate-400 w-4">{i+1}</span>
+                      <span className="text-sm font-medium text-slate-700 flex-1 truncate">{app.name}</span>
+                      <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-600 rounded-full transition-all duration-300" style={{ width: `${(app.dur/maxDur)*100}%` }} />
                       </div>
-                      <span className="text-xs font-mono text-slate-500 w-14 text-right">{formatDuration(app.dur)}</span>
+                      <span className="text-xs font-mono text-slate-600 w-16 text-right font-medium">{formatDuration(app.dur)}</span>
+                      <span className="text-[10px] text-slate-400 w-8 text-right">({pct}%)</span>
                     </div>
                   );
                 })
@@ -269,7 +319,7 @@ export default function StudentDetailPage() {
                       <span className="text-[10px] text-slate-400">{entry.browser}</span>
                       <span className="text-[10px] text-slate-300">·</span>
                       <span className="text-[10px] text-slate-400">
-                        {new Date(entry.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(entry.timestamp).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
                   </div>
@@ -300,17 +350,38 @@ export default function StudentDetailPage() {
             <tbody>
               {sessions.length === 0
                 ? <tr><td colSpan={7} className="text-center text-slate-400 py-8">No lab sessions found for this student.</td></tr>
-                : sessions.slice(0, 15).map(s => (
-                  <tr key={s.session_id}>
-                    <td className="text-xs text-slate-400">{s.date}</td>
-                    <td className="text-xs">{labsMap[s.lab_id]?.name || s.lab_id}</td>
-                    <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs text-primary-600 hover:underline">{s.machine_id}</Link></td>
-                    <td className="text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
-                    <td className="num">{formatDuration(s.total_duration)}</td>
-                    <td className="text-xs text-slate-400 max-w-[100px] truncate">{s.course_code}</td>
-                    <td><ComplianceBadge status={s.compliance_status} /></td>
-                  </tr>
-                ))
+                : sessions.slice(0, 15).map(s => {
+                  const isLive = !s.logout_time;
+                  return (
+                    <tr key={s.session_id} className={isLive ? "bg-emerald-50/40" : ""}>
+                      <td className="text-xs text-slate-400">{s.date}</td>
+                      <td className="text-xs">{labsMap[s.lab_id]?.name || s.lab_id}</td>
+                      <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs text-primary-600 hover:underline">{s.machine_id}</Link></td>
+                      <td className="text-xs">{formatTimeIST(s.login_time)}</td>
+                      <td className="num">
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            {formatDuration(getSessionDuration(s))}
+                          </span>
+                        ) : (
+                          formatDuration(s.total_duration)
+                        )}
+                      </td>
+                      <td className="text-xs text-slate-400 max-w-[100px] truncate">{s.course_code || "—"}</td>
+                      <td>
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Active Now
+                          </span>
+                        ) : (
+                          <ComplianceBadge status={s.compliance_status} />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               }
             </tbody>
           </table>

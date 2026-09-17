@@ -5,7 +5,7 @@ import {
 import {
   Monitor, Users, Activity, CheckCircle2, FlaskConical, Clock, Cpu, Globe
 } from "lucide-react";
-import { todayStr, formatDuration, COLLEGE_PERIODS } from "../data/mockData";
+import { todayStr, formatDuration, COLLEGE_PERIODS, formatTimeIST, getISTMinutes, formatIstDate } from "../data/collegeConfig";
 import {
   StatCard, ComplianceBadge, SectionHeading, PageWrapper, getMachineStatus
 } from "../components/Shared";
@@ -24,30 +24,41 @@ export default function OverviewPage({ globalDate }) {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  const [lastUpdated,  setLastUpdated]  = useState(new Date());
 
-    Promise.all([
+  const loadData = (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    return Promise.all([
       fetchLabs(),
       fetchUsage({ date: today }),
       fetchMachines(),
       fetchTopSites("", today),
     ]).then(([labs, sess, machs, sites]) => {
-      if (active) {
-        setLabsData(labs  || []);
-        setSessionsData(sess  || []);
-        setMachinesData(machs || []);
-        setTopSitesData(sites || []);
-        setLoading(false);
-      }
+      setLabsData(labs  || []);
+      setSessionsData(sess  || []);
+      setMachinesData(machs || []);
+      setTopSitesData(sites || []);
+      setLastUpdated(new Date());
+      if (!silent) setLoading(false);
     }).catch(err => {
       console.error("OverviewPage fetch error:", err);
-      if (active) { setError(err.message); setLoading(false); }
+      if (!silent) {
+        setError(err.message);
+        setLoading(false);
+      }
     });
+  };
 
-    return () => { active = false; };
+  useEffect(() => {
+    loadData(false);
+    // Poll every 15 seconds for real-time overview updates
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 15000);
+    return () => clearInterval(interval);
   }, [today]);
 
   // Filter labs by department if not admin
@@ -77,19 +88,31 @@ export default function OverviewPage({ globalDate }) {
   }, [visibleMachines, todaySessions]);
 
   const complianceAll = useMemo(() => {
-    const c = todaySessions.filter(s => s.compliance_status === "compliant").length;
-    return todaySessions.length > 0 ? Math.round((c / todaySessions.length) * 100) : 0;
+    const scheduled = todaySessions.filter(s => s.compliance_status && !["open_access", "no_slot", "pending"].includes(s.compliance_status));
+    const c = scheduled.filter(s => s.compliance_status === "compliant").length;
+    return scheduled.length > 0 ? Math.round((c / scheduled.length) * 100) : (todaySessions.length > 0 ? 100 : 0);
   }, [todaySessions]);
 
-  // Period-wise utilization across all visible labs (09:15-10:15, etc.)
+  const filteredTopSites = useMemo(() => {
+    const IGNORED = new Set([
+      "new-tab", "browser-tab", "newtab", "about:blank", "about", "chrome",
+      "edge", "extensions", "settings", "localhost", "127.0.0.1"
+    ]);
+    return (topSitesData || []).filter(s => {
+      const d = (s.domain || "").trim().toLowerCase();
+      return d && !IGNORED.has(d) && !d.startsWith("chrome-") && !d.startsWith("edge-");
+    });
+  }, [topSitesData]);
+
+  // Period-wise utilization across all visible labs in Indian Standard Time (IST)
   const hourlyData = useMemo(() => {
     return COLLEGE_PERIODS.map(period => {
       const startMins = period.startH * 60 + period.startM;
       const endMins   = period.endH * 60 + period.endM;
       const count = todaySessions.filter(s => {
         if (!s.login_time) return false;
-        const d = new Date(s.login_time);
-        const mins = d.getHours() * 60 + d.getMinutes();
+        const mins = getISTMinutes(s.login_time);
+        if (mins === null) return false;
         return mins >= startMins && mins < endMins;
       }).length;
       return { hour: period.label, periodName: period.name, range: period.range, sessions: count };
@@ -151,7 +174,7 @@ export default function OverviewPage({ globalDate }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Overview {isAdmin ? "" : `— ${user.department}`}</h1>
-          <p className="page-subtitle">{isAdmin ? "All labs" : `${user.department} department`} · {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="page-subtitle">{isAdmin ? "All labs" : `${user.department} department`} · {formatIstDate(today)}</p>
         </div>
       </div>
 
@@ -188,10 +211,10 @@ export default function OverviewPage({ globalDate }) {
       <div className="card card-body mb-6">
         <SectionHeading title={`Top Browsed Websites — ${today}`} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {topSitesData.length === 0
+          {filteredTopSites.length === 0
             ? <p className="text-sm text-slate-400 col-span-full py-4 text-center">No browser activity recorded for today.</p>
-            : topSitesData.slice(0, 8).map((site, i) => {
-              const maxDur = topSitesData[0].active_duration || 1;
+            : filteredTopSites.slice(0, 8).map((site, i) => {
+              const maxDur = filteredTopSites[0].active_duration || 1;
               return (
                 <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
                   <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
@@ -270,8 +293,15 @@ export default function OverviewPage({ globalDate }) {
                     <p className="text-xs text-slate-400 truncate">{s.machine_id} · {s.course_code}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-mono text-slate-600">{formatDuration(s.total_duration)}</p>
-                    <p className="text-xs text-slate-400">{new Date(s.login_time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
+                    {!s.logout_time ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live
+                      </span>
+                    ) : (
+                      <p className="text-xs font-mono text-slate-600">{formatDuration(s.total_duration)}</p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-0.5">{formatTimeIST(s.login_time)}</p>
                   </div>
                 </div>
               ))}

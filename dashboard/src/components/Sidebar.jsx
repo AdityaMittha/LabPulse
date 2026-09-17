@@ -1,7 +1,7 @@
 // Sidebar navigation component
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { COLLEGE } from "../data/mockData";
+import { COLLEGE } from "../data/collegeConfig";
 import {
   LayoutDashboard, FlaskConical, Monitor, Users,
   ClipboardCheck, FileBarChart2, Settings, LogOut,

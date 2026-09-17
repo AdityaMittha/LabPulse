@@ -88,6 +88,45 @@ def clear_pending_session() -> None:
         logger.warning("Could not clear pending session: %s", exc)
 
 
+def _pending_snapshot_path() -> str:
+    return os.path.join(_base_dir(), "pending_snapshot.json")
+
+
+def save_pending_snapshot(snapshot: dict) -> None:
+    """Periodically persist in-memory tracker snapshot to disk."""
+    path = _pending_snapshot_path()
+    try:
+        data = dict(snapshot)
+        data["_saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except OSError as exc:
+        logger.debug("Could not save pending snapshot: %s", exc)
+
+
+def load_pending_snapshot() -> dict | None:
+    """Load pending snapshot from disk if present."""
+    path = _pending_snapshot_path()
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("Could not read pending snapshot: %s", exc)
+        return None
+
+
+def clear_pending_snapshot() -> None:
+    """Delete pending_snapshot.json after a successful upload."""
+    path = _pending_snapshot_path()
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
 # ── Boot-time drain ───────────────────────────────────────────────────────────
 
 def drain_on_boot(uploader, timeout_seconds: int = 45) -> bool:
@@ -108,11 +147,36 @@ def drain_on_boot(uploader, timeout_seconds: int = 45) -> bool:
     elapsed = time.time() - start
     remaining = timeout_seconds - elapsed
 
-    # ── Step 2: Handle pending session-end from previous boot ────────────────
+    # ── Step 2: Handle pending session-end and un-flushed snapshot from previous boot ──
     pending = load_pending_session()
+    snapshot = load_pending_snapshot()
+
+    if pending and snapshot:
+        try:
+            from summarizer import build_summary, hour_boundary
+            hour_start, hour_end = hour_boundary()
+            payload = build_summary(
+                snapshot,
+                pending["session_id"],
+                pending["student_id"],
+                pending["machine_id"],
+                pending["lab_id"],
+                hour_start,
+                hour_end,
+                pending.get("timetable_slot", "NONE"),
+            )
+            uploader.upload_summary(payload)
+            clear_pending_snapshot()
+            logger.info("Boot drain: uploaded un-flushed session summary from previous boot")
+        except Exception as exc:
+            logger.debug("Boot drain summary error: %s", exc)
+
     if pending:
         logger.info("Boot drain: sending session-end for pending session %s", pending["session_id"])
-        logout_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        # Use the last activity time recorded within 15s of previous power cut / shutdown,
+        # fallback to session save time, avoiding recording 24h+ idle time across reboots
+        last_saved_time = (snapshot or {}).get("_saved_at") or pending.get("saved_at")
+        logout_time = last_saved_time or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         login_ts  = _parse_ts(pending.get("login_time", logout_time))
         logout_ts = _parse_ts(logout_time)
         total     = max(0, int(logout_ts - login_ts))
@@ -122,7 +186,7 @@ def drain_on_boot(uploader, timeout_seconds: int = 45) -> bool:
         )
         if ok:
             clear_pending_session()
-            logger.info("Boot drain: pending session-end sent and cleared")
+            logger.info("Boot drain: pending session-end sent and cleared (duration: %ds)", total)
         else:
             logger.warning("Boot drain: session-end still offline, will retry later")
 

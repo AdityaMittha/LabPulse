@@ -1,7 +1,7 @@
-// Pure utility functions and static configuration shared across the dashboard.
-// All dynamic data is now fetched from the real backend API.
+// Institutional configuration and IST time utilities for LabPulse.
+// All lab and session data is fetched dynamically in real-time from the AWS backend API.
 
-// ── Static institutional branding ──────────────────────────────────────────
+// ── Institutional branding ──────────────────────────────────────────────────
 export const COLLEGE = {
   name:      "Walchand Institute of Technology",
   shortName: "WIT",
@@ -31,7 +31,7 @@ export function formatDuration(seconds) {
 export const COLLEGE_PERIODS = [
   { id: "p1", label: "09:15", name: "Period 1", range: "09:15–10:15", startH: 9,  startM: 15, endH: 10, endM: 15 },
   { id: "p2", label: "10:15", name: "Period 2", range: "10:15–11:15", startH: 10, startM: 15, endH: 11, endM: 15 },
-  { id: "p3", label: "11:15", name: "Period 3", range: "11:15–12:15", startH: 11, startM: 15, endH: 12, endM: 15 },
+  { id: "p3", label: "11:15", name: "Period 3 / Lab", range: "11:15–13:15", startH: 11, startM: 15, endH: 13, endM: 15 },
   { id: "p4", label: "13:15", name: "Period 4", range: "13:15–14:15", startH: 13, startM: 15, endH: 14, endM: 15 },
   { id: "p5", label: "14:15", name: "Period 5", range: "14:15–15:15", startH: 14, startM: 15, endH: 15, endM: 15 },
   { id: "p6", label: "15:30", name: "Period 6", range: "15:30–16:30", startH: 15, startM: 30, endH: 16, endM: 30 },
@@ -52,12 +52,72 @@ export const LAB_SLOT_PRESETS = [
   { label: "16:30 – 17:30 (Period 7)",      start: "16:30", end: "17:30" },
 ];
 
+export function formatTimeIST(dateOrIso) {
+  if (!dateOrIso) return "—";
+  try {
+    const d = new Date(dateOrIso);
+    if (isNaN(d.getTime())) return String(dateOrIso);
+    return d.toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return String(dateOrIso);
+  }
+}
+
+export function getISTMinutes(dateOrIso) {
+  if (!dateOrIso) return null;
+  const d = new Date(dateOrIso);
+  if (isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find(p => p.type === "hour")?.value || 0);
+  const minute = Number(parts.find(p => p.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
 export function getSessionPeriod(loginTime) {
   if (!loginTime) return null;
-  const d = new Date(loginTime);
-  const totalMins = d.getHours() * 60 + d.getMinutes();
+  const totalMins = getISTMinutes(loginTime);
+  if (totalMins === null) return null;
   return COLLEGE_PERIODS.find(
     p => totalMins >= (p.startH * 60 + p.startM) && totalMins < (p.endH * 60 + p.endM)
   );
+}
+
+export function normalizeYear(yr) {
+  if (!yr) return "";
+  const u = yr.toString().trim().toUpperCase();
+  if (u === "FE" || u === "FY" || u === "FIRST" || u === "1" || u === "1ST") return "FY";
+  if (u === "SE" || u === "SY" || u === "SECOND" || u === "2" || u === "2ND") return "SY";
+  if (u === "TE" || u === "TY" || u === "THIRD" || u === "3" || u === "3RD") return "TY";
+  if (u === "BE" || u === "FINAL" || u === "FOURTH" || u === "4" || u === "4TH") return "BE";
+  return u;
+}
+
+export function formatIstDate(dateOrIso) {
+  if (!dateOrIso) return "—";
+  try {
+    const d = typeof dateOrIso === "string" && dateOrIso.length === 10
+      ? new Date(dateOrIso + "T00:00:00")
+      : new Date(dateOrIso);
+    if (isNaN(d.getTime())) return String(dateOrIso);
+    return d.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return String(dateOrIso);
+  }
 }
 

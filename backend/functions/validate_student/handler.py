@@ -85,15 +85,16 @@ def _normalize_year(yr: str) -> str:
     return y
 
 
-def _find_timetable_slot(lab_id: str, student_year: str = "", student_batch: str = "") -> str:
-    """Return the active timetable slot_id for the lab at the current time.
+def _find_timetable_slot(lab_id: str, student_year: str = "", student_batch: str = "") -> tuple[str, str]:
+    """Return the active (slot_id, course_code) for the lab at the current IST time.
     Supports minute-level precision, allows a 15-minute early check-in window,
     and prioritizes slots matching the student's academic year and batch.
     """
-    now = time.gmtime()
+    # Convert UTC to Indian Standard Time (IST = UTC + 5:30 = +19800 seconds)
+    ist_now = time.gmtime(time.time() + 19800)
     day_map = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-    day = day_map[now.tm_wday]
-    current_mins = now.tm_hour * 60 + now.tm_min
+    day = day_map[ist_now.tm_wday]
+    current_mins = ist_now.tm_hour * 60 + ist_now.tm_min
     std_norm = _normalize_year(student_year)
     batch_norm = (student_batch or "").strip().upper()
 
@@ -113,12 +114,12 @@ def _find_timetable_slot(lab_id: str, student_year: str = "", student_batch: str
                 if (start_mins - 15) <= current_mins < end_mins:
                     matching_slots.append(slot)
             except Exception:
-                current_time = f"{now.tm_hour:02d}:{now.tm_min:02d}"
+                current_time = f"{ist_now.tm_hour:02d}:{ist_now.tm_min:02d}"
                 if slot.get("start_time", "") <= current_time < slot.get("end_time", ""):
                     matching_slots.append(slot)
 
     if not matching_slots:
-        return "NONE"
+        return "NONE", ""
 
     # Prioritize slot explicitly matching both the student's year and batch
     if std_norm and batch_norm:
@@ -126,22 +127,32 @@ def _find_timetable_slot(lab_id: str, student_year: str = "", student_batch: str
             slot_year = _normalize_year(s.get("year", ""))
             slot_group = (s.get("student_group", "") or "").upper()
             if slot_year == std_norm and (batch_norm in slot_group or slot_group in ("ALL", "")):
-                return s["slot_id"]
+                return s["slot_id"], s.get("course_code", "")
 
     # Next prioritize slot matching student's batch
     if batch_norm:
         for s in matching_slots:
             slot_group = (s.get("student_group", "") or "").upper()
             if batch_norm in slot_group:
-                return s["slot_id"]
+                return s["slot_id"], s.get("course_code", "")
 
     # Next prioritize slot matching student's year
     if std_norm:
         for s in matching_slots:
             if _normalize_year(s.get("year", "")) == std_norm:
-                return s["slot_id"]
+                return s["slot_id"], s.get("course_code", "")
 
-    return matching_slots[0]["slot_id"]
+    # Match open/ALL group slots
+    for s in matching_slots:
+        if (s.get("student_group", "") or "").upper() in ("ALL", ""):
+            return s["slot_id"], s.get("course_code", "")
+
+    # If student belongs to a specific batch not in this slot, do not misbind to another batch
+    if batch_norm:
+        return "NONE", ""
+
+    best = matching_slots[0]
+    return best["slot_id"], best.get("course_code", "")
 
 
 # ── Main handler ─────────────────────────────────────────────────────────────
@@ -211,7 +222,7 @@ def lambda_handler(event, context):
     # Create session record
     session_id     = str(uuid.uuid4())
     login_time     = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    timetable_slot = _find_timetable_slot(lab_id, student.get("year", ""), batch)
+    timetable_slot, course_code = _find_timetable_slot(lab_id, student.get("year", ""), batch)
 
     sessions_table.put_item(Item={
         "session_id":        session_id,
@@ -227,7 +238,7 @@ def lambda_handler(event, context):
         "timetable_slot":    timetable_slot,
         "compliance_status": "pending",
         "date":              login_time[:10],
-        "course_code":       "",
+        "course_code":       course_code,
     })
 
     # Update machine last_seen_at
@@ -247,5 +258,6 @@ def lambda_handler(event, context):
         "batch":          batch,
         "session_token":  session_token,
         "timetable_slot": timetable_slot,
+        "course_code":    course_code,
         "login_time":     login_time,
     })

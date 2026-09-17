@@ -173,8 +173,8 @@ def _delete_lab_cascade(lab_id):
 
 
 def lambda_handler(event, context):
-    method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
-    path   = event.get("rawPath", "")
+    method = event.get("requestContext", {}).get("http", {}).get("method") or event.get("httpMethod", "GET")
+    path   = event.get("rawPath") or event.get("path") or event.get("resource") or ""
     body   = {}
     if event.get("body"):
         try:
@@ -409,6 +409,27 @@ def _handle_timetable(method, body, event):
             "expected_count": expected_count,
         })
         return _cors({"slot_id": slot_id, "status": "created"}, 201)
+
+    if method == "PUT":
+        slot_id = (body.get("slot_id") or qs.get("slot_id") or "").strip()
+        if not slot_id:
+            return _cors({"error": "slot_id is required for update"}, 400)
+        # Fetch existing item to merge
+        existing = timetable_table.get_item(Key={"slot_id": slot_id}).get("Item")
+        if not existing:
+            return _cors({"error": f"Slot {slot_id!r} not found"}, 404)
+        # Merge updates (only fields provided in body)
+        updatable = ["end_time", "year", "course_code", "faculty_name", "student_group", "expected_count"]
+        updated = dict(existing)
+        for field in updatable:
+            if field in body and body[field] is not None:
+                updated[field] = body[field]
+        if "expected_count" in updated:
+            updated["expected_count"] = int(updated["expected_count"] or 25)
+        if "year" in updated:
+            updated["year"] = (updated["year"] or "BE").strip().upper()
+        timetable_table.put_item(Item=updated)
+        return _cors({"slot_id": slot_id, "status": "updated"})
 
     if method == "DELETE":
         slot_id = qs.get("slot_id") or body.get("slot_id")

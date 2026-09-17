@@ -194,6 +194,14 @@ export async function addTimetableSlot(slot) {
   return data;
 }
 
+export async function updateTimetableSlot(slot) {
+  const data = await apiFetch("/admin/timetable", {
+    method: "PUT",
+    body: JSON.stringify(slot),
+  });
+  return data;
+}
+
 export async function deleteTimetableSlot(slotId) {
   const data = await apiFetch(`/admin/timetable?slot_id=${encodeURIComponent(slotId)}`, {
     method: "DELETE",

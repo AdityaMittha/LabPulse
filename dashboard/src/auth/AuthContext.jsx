@@ -2,12 +2,6 @@ import { createContext, useContext, useState, useCallback } from "react";
 
 const AuthContext = createContext(null);
 
-// Mock users (fallback when VITE_COGNITO_CLIENT_ID is empty)
-const MOCK_USERS = {
-  "admin@wit.ac.in":   { name: "Dr. S. Kulkarni", role: "admin",   password: "Admin@123" },
-  "faculty@wit.ac.in": { name: "Prof. P. Jadhav", role: "faculty", password: "Faculty@123" },
-};
-
 function decodeJwt(token) {
   try {
     const base64Url = token.split(".")[1];
@@ -36,16 +30,7 @@ export function AuthProvider({ children }) {
     const region = import.meta.env.VITE_AWS_REGION || "ap-south-1";
 
     if (!clientId) {
-      // Simulate network delay
-      await new Promise(r => setTimeout(r, 800));
-      const found = MOCK_USERS[email.toLowerCase()];
-      if (!found || found.password !== password) {
-        throw new Error("Invalid email or password.");
-      }
-      const userData = { email, name: found.name, role: found.role };
-      sessionStorage.setItem("labpulse_user", JSON.stringify(userData));
-      setUser(userData);
-      return userData;
+      throw new Error("Cognito Client ID is not configured. Real-time authentication required.");
     }
 
     // Real Cognito USER_PASSWORD_AUTH

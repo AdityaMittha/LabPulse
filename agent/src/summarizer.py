@@ -46,7 +46,7 @@ def build_summary(
         "lab_id": lab_id,
         "hour_start": hour_start,
         "hour_end": hour_end,
-        "date": hour_start[:10],                       # YYYY-MM-DD
+        "date": hour_start[:10] if hour_start and len(hour_start) >= 10 else time.strftime("%Y-%m-%d", time.gmtime(time.time() + 19800)),
         "timetable_slot": timetable_slot,
         "summary": {
             "app_usage": [

@@ -2,12 +2,20 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Monitor, Clock, Activity, CheckCircle2, Edit2 } from "lucide-react";
-import { formatDuration, todayStr, COLLEGE_PERIODS } from "../data/mockData";
+import { formatDuration, todayStr, COLLEGE_PERIODS, formatTimeIST } from "../data/collegeConfig";
 import { StatCard, ComplianceBadge, MachineStatusBadge, SectionHeading, EmptyState, PageWrapper } from "../components/Shared";
 import { fetchMachines, fetchUsage, fetchLabs, deleteMachine, updateMachine } from "../api/apiClient";
 import ConfirmModal from "../components/ConfirmModal";
 
-const APP_COLORS = ["#0d9488", "#14b8a6", "#78716c", "#d97706", "#16a34a", "#dc2626"];
+const APP_COLORS = [
+  "#2563eb", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#f97316", // Orange
+];
 
 export default function MachineDetailPage() {
   const { machineId } = useParams();
@@ -27,46 +35,70 @@ export default function MachineDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [newKey, setNewKey] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
-    Promise.all([
+  const loadData = (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    return Promise.all([
       fetchMachines(),
       fetchUsage({ machine_id: machineId }),
       fetchLabs(),
     ]).then(([machines, sess, labs]) => {
-      if (!active) return;
       const found = machines.find(m => m.machine_id === machineId) || null;
       setMachine(found);
-      setSessions(sess.sort((a, b) => new Date(b.login_time) - new Date(a.login_time)));
+      setSessions((sess || []).sort((a, b) => new Date(b.login_time) - new Date(a.login_time)));
       if (found) {
         setLab(labs.find(l => l.lab_id === found.lab_id) || null);
       }
-      setAllLabs(labs);
-      setLoading(false);
+      setAllLabs(labs || []);
+      setLastUpdated(new Date());
+      if (!silent) setLoading(false);
     }).catch(err => {
       console.error("MachineDetailPage fetch error:", err);
-      if (active) { setError(err.message); setLoading(false); }
+      if (!silent) {
+        setError(err.message);
+        setLoading(false);
+      }
     });
+  };
 
-    return () => { active = false; };
+  useEffect(() => {
+    loadData(false);
+    // Poll every 10 seconds for real-time machine telemetry
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [machineId]);
 
+  const activeSession = useMemo(() => sessions.find(s => !s.logout_time), [sessions]);
+
+  const getSessionDuration = (s) => {
+    if (!s.logout_time) {
+      const liveSecs = Math.max(0, Math.floor((Date.now() - new Date(s.login_time).getTime()) / 1000));
+      return Math.max(Number(s.total_duration || 0), liveSecs);
+    }
+    return Number(s.total_duration || 0);
+  };
+
   const todaySessions = useMemo(() => sessions.filter(s => s.date === today), [sessions, today]);
-  const totalActive   = todaySessions.reduce((a, s) => a + (s.total_duration || 0), 0);
+  const totalActive   = useMemo(() => todaySessions.reduce((a, s) => a + getSessionDuration(s), 0), [todaySessions]);
 
   // App breakdown for pie chart
   const appData = useMemo(() => {
     const map = {};
     sessions.forEach(s => {
       (s.app_usages || []).forEach(a => {
-        map[a.app_name] = (map[a.app_name] || 0) + (a.active_duration || 0);
+        const rawName = a.app_name || "";
+        if (!rawName) return;
+        map[rawName] = (map[rawName] || 0) + Number(a.active_duration || 0);
       });
     });
     return Object.entries(map)
-      .map(([name, val]) => ({ name: name.replace(".exe", ""), value: val }))
+      .map(([name, val]) => ({ name: name.replace(/\.exe$/i, ""), rawName: name, duration: Number(val), value: Number(val) }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
   }, [sessions]);
@@ -124,7 +156,20 @@ export default function MachineDetailPage() {
       {/* Header */}
       <div className="page-header flex items-center justify-between">
         <div>
-          <h1 className="page-title font-mono">{machine.machine_id}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="page-title font-mono">{machine.machine_id}</h1>
+            {activeSession ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Active: {activeSession.student_name || activeSession.student_id}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] text-slate-500 bg-slate-100/80 border border-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Telemetry Live
+              </span>
+            )}
+          </div>
           <p className="page-subtitle">
             {lab?.name} · {machine.hostname} · {machine.ip_address || "No IP logged"}
             {minAgo !== null && <span className="ml-2 text-slate-400">· last seen {minAgo}m ago</span>}
@@ -159,23 +204,89 @@ export default function MachineDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* App usage pie */}
+        {/* App usage breakdown */}
         <div className="card card-body">
-          <SectionHeading title="App Usage Breakdown" />
-          {appData.length === 0
-            ? <EmptyState title="No app data yet" />
-            : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={appData} dataKey="duration" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={e => e.name.replace(".exe","")}>
-                    {appData.map((_, i) => <Cell key={i} fill={APP_COLORS[i % APP_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={v => formatDuration(v)} contentStyle={{ border:"1px solid #e7e5e4", borderRadius:10, fontSize:12 }} />
-                  <Legend formatter={v => v.replace(".exe","")} iconSize={10} wrapperStyle={{ fontSize:11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            )
-          }
+          <div className="flex items-center justify-between mb-2">
+            <SectionHeading title="App Usage Breakdown" />
+            <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Live Telemetry
+            </span>
+          </div>
+          {appData.length === 0 ? (
+            <EmptyState title="No app data yet" />
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-6 pt-1">
+              {/* Donut Chart with center total */}
+              <div className="w-44 h-44 relative shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={appData}
+                      dataKey="duration"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={48}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      stroke="#fff"
+                      strokeWidth={2}
+                    >
+                      {appData.map((_, i) => (
+                        <Cell key={i} fill={APP_COLORS[i % APP_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v, name) => [formatDuration(v), name]}
+                      contentStyle={{
+                        backgroundColor: "#0f172a",
+                        color: "#fff",
+                        borderRadius: "8px",
+                        border: "none",
+                        fontSize: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
+                        padding: "8px 12px",
+                      }}
+                      itemStyle={{ color: "#f8fafc" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[11px] font-medium text-slate-400">Total</span>
+                  <span className="text-xs font-bold text-slate-800 font-mono">
+                    {formatDuration(appData.reduce((a, b) => a + (b.duration || 0), 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Clean arranged breakdown list */}
+              <div className="flex-1 w-full space-y-2.5">
+                {appData.map((app, i) => {
+                  const total = appData.reduce((a, b) => a + (b.duration || 0), 0);
+                  const pct = total > 0 ? Math.round((app.duration / total) * 100) : 0;
+                  return (
+                    <div key={app.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                          style={{ backgroundColor: APP_COLORS[i % APP_COLORS.length] }}
+                        />
+                        <span className="font-medium text-slate-700 truncate">{app.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-slate-400 font-mono text-[11px]">{pct}%</span>
+                        <span className="font-mono font-medium text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-[11px]">
+                          {formatDuration(app.duration)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Machine info */}
@@ -190,7 +301,7 @@ export default function MachineDetailPage() {
               ["Building",      lab?.building || "—"],
               ["Live Status",   <MachineStatusBadge key="status" machine={machine} activeSessions={sessions} />],
               ["Admin Status",  <span key="adm" className="capitalize font-medium text-slate-700">{machine.status || "active"}</span>],
-              ["Last Seen",     lastSeen ? lastSeen.toLocaleString("en-IN") : "Never logged in"],
+              ["Last Seen",     lastSeen ? lastSeen.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "Never logged in"],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center py-2.5 gap-4">
                 <dt className="w-32 text-slate-400 shrink-0 text-xs font-medium">{label}</dt>
@@ -222,16 +333,40 @@ export default function MachineDetailPage() {
             <tbody>
               {sessions.length === 0
                 ? <tr><td colSpan={6} className="text-center text-slate-400 py-8">No sessions found for this machine.</td></tr>
-                : sessions.slice(0, 15).map(s => (
-                  <tr key={s.session_id}>
-                    <td><Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name}</Link></td>
-                    <td className="text-xs text-slate-400">{s.date}</td>
-                    <td className="text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
-                    <td className="num">{formatDuration(s.total_duration)}</td>
-                    <td className="text-xs text-slate-400 max-w-[120px] truncate">{s.course_code}</td>
-                    <td><ComplianceBadge status={s.compliance_status} /></td>
-                  </tr>
-                ))
+                : sessions.slice(0, 15).map(s => {
+                  const isLive = !s.logout_time;
+                  return (
+                    <tr key={s.session_id} className={isLive ? "bg-emerald-50/40" : ""}>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          {isLive && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>}
+                          <Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name || s.student_id}</Link>
+                        </div>
+                      </td>
+                      <td className="text-xs text-slate-400">{s.date}</td>
+                      <td className="text-xs">{formatTimeIST(s.login_time)}</td>
+                      <td className="num">
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                            {formatDuration(getSessionDuration(s))}
+                          </span>
+                        ) : (
+                          formatDuration(s.total_duration)
+                        )}
+                      </td>
+                      <td className="text-xs text-slate-400 max-w-[120px] truncate">{s.course_code || "—"}</td>
+                      <td>
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                            Active Now
+                          </span>
+                        ) : (
+                          <ComplianceBadge status={s.compliance_status} />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               }
             </tbody>
           </table>

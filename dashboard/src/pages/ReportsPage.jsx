@@ -10,7 +10,7 @@ import {
 import { StatCard, SectionHeading, PageWrapper } from "../components/Shared";
 import { useAuth } from "../auth/AuthContext";
 import { fetchLabs, fetchUsage } from "../api/apiClient";
-import { COLLEGE_PERIODS, formatDuration, todayStr } from "../data/mockData";
+import { COLLEGE_PERIODS, formatDuration, todayStr, formatTimeIST, getISTMinutes } from "../data/collegeConfig";
 
 function getPast7Days(endDateStr) {
   let end;
@@ -158,29 +158,27 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
     const total = filteredSessions.length;
     const compliant = filteredSessions.filter(s => s.compliance_status === "compliant").length;
     const partial   = filteredSessions.filter(s => s.compliance_status === "partial").length;
-    const nonCompliant = filteredSessions.filter(s => s.compliance_status === "non_compliant" || s.compliance_status === "pending").length;
-    const pct = total > 0 ? Math.round((compliant / total) * 100) : 0;
+    const nonCompliant = filteredSessions.filter(s => s.compliance_status === "non_compliant").length;
+    const openAccess = filteredSessions.filter(s => ["open_access", "no_slot"].includes(s.compliance_status)).length;
+    const pending   = filteredSessions.filter(s => s.compliance_status === "pending" || (!s.logout_time && !s.compliance_status)).length;
+    const scheduledTotal = compliant + partial + nonCompliant;
+    const pct = scheduledTotal > 0 ? Math.round((compliant / scheduledTotal) * 100) : (total > 0 ? 100 : 0);
     const uniqueStudents = new Set(filteredSessions.map(s => s.student_id)).size;
     const uniqueMachines = new Set(filteredSessions.map(s => s.machine_id)).size;
 
-    return { total, compliant, partial, nonCompliant, pct, uniqueStudents, uniqueMachines };
+    return { total, compliant, partial, nonCompliant, openAccess, pending, pct, uniqueStudents, uniqueMachines };
   }, [filteredSessions]);
 
-  // Period / Hourly activity breakdown for the selected day
+  // Period / Hourly activity breakdown for the selected day in Indian Standard Time (IST)
   const periodData = useMemo(() => {
     return COLLEGE_PERIODS.map(p => {
+      const pStart = p.startH * 60 + p.startM;
+      const pEnd   = p.endH   * 60 + p.endM;
       const count = filteredSessions.filter(s => {
         if (!s.login_time) return false;
-        try {
-          const timePart = s.login_time.includes("T") ? s.login_time.split("T")[1].slice(0, 5) : s.login_time.slice(0, 5);
-          const [h, m] = timePart.split(":").map(Number);
-          const mins = h * 60 + m;
-          const pStart = p.startH * 60 + p.startM;
-          const pEnd   = p.endH   * 60 + p.endM;
-          return mins >= pStart && mins < pEnd;
-        } catch {
-          return false;
-        }
+        const mins = getISTMinutes(s.login_time);
+        if (mins === null) return false;
+        return mins >= pStart && mins < pEnd;
       }).length;
       return {
         name: p.name,
@@ -209,6 +207,9 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
     return past7Days.map(date => {
       const daySessions = filteredSessions.filter(s => s.date === date);
       const compliant = daySessions.filter(s => s.compliance_status === "compliant").length;
+      const partial   = daySessions.filter(s => s.compliance_status === "partial").length;
+      const nonCompliant = daySessions.filter(s => s.compliance_status === "non_compliant").length;
+      const scheduledTotal = compliant + partial + nonCompliant;
       const total = daySessions.length;
       return {
         rawDate: date,
@@ -216,7 +217,7 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
         dateFull: formatDateLong(date),
         sessions: total,
         compliant,
-        compliancePct: total > 0 ? Math.round((compliant / total) * 100) : 0,
+        compliancePct: scheduledTotal > 0 ? Math.round((compliant / scheduledTotal) * 100) : (total > 0 ? 100 : 0),
       };
     });
   }, [past7Days, filteredSessions]);
@@ -240,9 +241,9 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
         alert("No session records found for this date.");
         return;
       }
-      const headers = "Student ID,Student Name,Machine ID,Lab ID,Login Time,Duration,Timetable Slot,Compliance Status";
+      const headers = "Student ID,Student Name,Machine ID,Lab ID,Login Time (IST),Duration,Timetable Slot,Compliance Status";
       const rows = filteredSessions.map(s =>
-        `"${s.student_id || ""}","${(s.student_name || "").replace(/"/g, '""')}","${s.machine_id || ""}","${s.lab_id || ""}","${s.login_time || ""}",${s.total_duration || 0},"${s.timetable_slot || ""}","${s.compliance_status || ""}"`
+        `"${s.student_id || ""}","${(s.student_name || "").replace(/"/g, '""')}","${s.machine_id || ""}","${s.lab_id || ""}","${formatTimeIST(s.login_time)}",${s.total_duration || 0},"${s.timetable_slot || ""}","${s.compliance_status || ""}"`
       );
       const csvContent = [headers, ...rows].join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -436,24 +437,28 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
             <StatCard
               label={`Total Sessions (${relativity || formatDateShort(selectedDate)})`}
               value={dayStats.total}
+              sub={`${dayStats.uniqueStudents} students · ${dayStats.uniqueMachines} machines`}
               icon={FileBarChart2}
               color="blue"
             />
             <StatCard
               label="Compliant Sessions"
               value={dayStats.compliant}
+              sub={`${dayStats.partial} partial`}
               icon={CheckCircle2}
               color="green"
             />
             <StatCard
-              label="Unscheduled / Off-Slot"
-              value={dayStats.nonCompliant}
+              label="Open Access / Off-Slot"
+              value={dayStats.openAccess}
+              sub={dayStats.nonCompliant > 0 ? `${dayStats.nonCompliant} non-compliant` : "Unscheduled lab work"}
               icon={AlertTriangle}
               color="amber"
             />
             <StatCard
               label="Compliance Rate"
               value={`${dayStats.pct}%`}
+              sub={dayStats.pending > 0 ? `${dayStats.pending} in progress` : "Scheduled syllabus slots"}
               icon={Clock}
               color="purple"
             />
@@ -573,7 +578,7 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
                       <th>PNR / ID</th>
                       <th>Lab</th>
                       <th>Machine</th>
-                      <th>Login Time</th>
+                      <th>Login Time (IST)</th>
                       <th>Duration</th>
                       <th>Scheduled Slot</th>
                       <th>Status</th>
@@ -588,8 +593,8 @@ export default function ReportsPage({ globalDate = todayStr(), onDateChange }) {
                           <span className="badge badge-slate">{s.lab_id}</span>
                         </td>
                         <td className="font-mono text-xs text-slate-600">{s.machine_id}</td>
-                        <td className="font-mono text-xs text-slate-600">
-                          {s.login_time?.includes("T") ? s.login_time.split("T")[1].slice(0, 5) : s.login_time || "—"}
+                        <td className="font-mono text-xs text-slate-700 font-medium">
+                          {formatTimeIST(s.login_time)}
                         </td>
                         <td className="text-xs text-slate-600">{formatDuration(s.total_duration)}</td>
                         <td className="text-xs text-slate-500 truncate max-w-[140px]">

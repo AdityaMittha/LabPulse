@@ -9,6 +9,7 @@ import boto3
 TABLE_PREFIX = os.environ.get("TABLE_PREFIX", "labpulse")
 dynamodb = boto3.resource("dynamodb")
 
+sessions_table          = dynamodb.Table(f"{TABLE_PREFIX}-Sessions")
 hourly_reports_table    = dynamodb.Table(f"{TABLE_PREFIX}-HourlyReports")
 app_usage_table         = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
 behavior_metrics_table  = dynamodb.Table(f"{TABLE_PREFIX}-BehaviorMetrics")
@@ -47,11 +48,11 @@ def lambda_handler(event, context):
         "ingested_at":  now,
     })
 
-    # Write AppUsage records
+    # Write AppUsage records (deterministic app_usage_id for real-time in-place updates)
     with app_usage_table.batch_writer() as batch:
         for app in body["summary"].get("app_usage", []):
             batch.put_item(Item={
-                "app_usage_id":     str(uuid.uuid4()),
+                "app_usage_id":     f"{session_id}#{app['app_name']}",
                 "session_id":       session_id,
                 "app_name":         app["app_name"],
                 "active_duration":  app["active_duration"],
@@ -88,6 +89,16 @@ def lambda_handler(event, context):
             "ingested_at":  now,
         })
 
+    # Update session last_activity if session exists
+    try:
+        sessions_table.update_item(
+            Key={"session_id": session_id},
+            UpdateExpression="SET last_activity = :t",
+            ExpressionAttributeValues={":t": now},
+        )
+    except Exception:
+        pass
+
     # Update machine last_seen_at
     machines_table.update_item(
         Key={"machine_id": body["machine_id"]},
@@ -97,6 +108,9 @@ def lambda_handler(event, context):
 
     return {
         "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        },
         "body": json.dumps({"status": "ok", "report_id": report_id}),
     }

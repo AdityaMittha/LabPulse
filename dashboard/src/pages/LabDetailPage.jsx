@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Monitor, Users, CheckCircle2, Activity, Globe, Edit2, Trash2 } from "lucide-react";
-import { todayStr, formatDuration, COLLEGE_PERIODS } from "../data/mockData";
+import { todayStr, formatDuration, COLLEGE_PERIODS, formatTimeIST, getISTMinutes } from "../data/collegeConfig";
 import {
   StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper
 } from "../components/Shared";
@@ -113,30 +113,41 @@ export default function LabDetailPage({ globalDate }) {
     }
   }
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  const [lastUpdated,    setLastUpdated]    = useState(new Date());
 
-    Promise.all([
+  const loadData = (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    return Promise.all([
       fetchMachines(labId),
       fetchUsage({ lab_id: labId, date: selectedDate }),
       fetchUsage({ lab_id: labId }),        // for heatmap (all dates)
       fetchTopSites(labId, selectedDate),
     ]).then(([machs, sess, allSess, sites]) => {
-      if (active) {
-        setMachinesData(machs    || []);
-        setSessionsData(sess     || []);
-        setAllLabSessions(allSess || []);
-        setTopSitesData(sites    || []);
-        setLoading(false);
-      }
+      setMachinesData(machs    || []);
+      setSessionsData(sess     || []);
+      setAllLabSessions(allSess || []);
+      setTopSitesData(sites    || []);
+      setLastUpdated(new Date());
+      if (!silent) setLoading(false);
     }).catch(err => {
       console.error("LabDetailPage fetch error:", err);
-      if (active) { setError(err.message); setLoading(false); }
+      if (!silent) {
+        setError(err.message);
+        setLoading(false);
+      }
     });
+  };
 
-    return () => { active = false; };
+  useEffect(() => {
+    loadData(false);
+    // Poll every 15 seconds for real-time lab updates
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 15000);
+    return () => clearInterval(interval);
   }, [labId, selectedDate]);
 
   const isAuthorized = useMemo(() => {
@@ -153,8 +164,8 @@ export default function LabDetailPage({ globalDate }) {
       const endMins   = period.endH * 60 + period.endM;
       const count = daySessions.filter(s => {
         if (!s.login_time) return false;
-        const d = new Date(s.login_time);
-        const mins = d.getHours() * 60 + d.getMinutes();
+        const mins = getISTMinutes(s.login_time);
+        if (mins === null) return false;
         return mins >= startMins && mins < endMins;
       }).length;
       return { hour: period.label, periodName: period.name, range: period.range, sessions: count };
@@ -180,8 +191,8 @@ export default function LabDetailPage({ globalDate }) {
       if (!s.login_time) return;
       const dt = new Date(s.login_time);
       const day = DAYS[dt.getDay() - 1];
-      const mins = dt.getHours() * 60 + dt.getMinutes();
-      const period = COLLEGE_PERIODS.find(p => mins >= (p.startH * 60 + p.startM) && mins < (p.endH * 60 + p.endM));
+      const mins = getISTMinutes(s.login_time);
+      const period = mins !== null ? COLLEGE_PERIODS.find(p => mins >= (p.startH * 60 + p.startM) && mins < (p.endH * 60 + p.endM)) : null;
       if (day && period && map[day] && map[day][period.id] !== undefined) {
         map[day][period.id]++;
       }
@@ -410,8 +421,17 @@ export default function LabDetailPage({ globalDate }) {
                   <tr key={s.session_id}>
                     <td><Link to={`/students/${s.student_id}`} className="font-medium text-primary-600 hover:underline">{s.student_name}</Link></td>
                     <td><Link to={`/machines/${s.machine_id}`} className="font-mono text-xs hover:underline text-slate-600">{s.machine_id}</Link></td>
-                    <td className="text-slate-500 text-xs">{new Date(s.login_time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td>
-                    <td className="num">{formatDuration(s.total_duration)}</td>
+                    <td className="text-slate-500 text-xs">{formatTimeIST(s.login_time)}</td>
+                    <td className="num">
+                      {!s.logout_time ? (
+                        <span className="text-emerald-600 font-medium inline-flex items-center gap-1 text-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Live
+                        </span>
+                      ) : (
+                        formatDuration(s.total_duration)
+                      )}
+                    </td>
                     <td className="text-xs text-slate-400 max-w-[120px] truncate">{s.course_code}</td>
                     <td><ComplianceBadge status={s.compliance_status} /></td>
                   </tr>

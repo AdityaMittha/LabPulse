@@ -89,7 +89,7 @@ class Uploader:
         try:
             resp = requests.post(url, json=payload, headers=self._headers(), timeout=timeout)
             if resp.status_code in (200, 201):
-                logger.info("Uploaded → %s (%s)", url.split("/")[-1], resp.status_code)
+                logger.info("Uploaded -> %s (%s)", url.split("/")[-1], resp.status_code)
                 return True
             logger.warning("Upload rejected: %s %s", resp.status_code, resp.text[:200])
             return False
@@ -115,7 +115,7 @@ class Uploader:
                 headers=self._headers(), timeout=8,
             )
             if resp.status_code in (200, 201, 204):
-                logger.debug("Heartbeat sent ✓")
+                logger.debug("Heartbeat sent [OK]")
                 return True
             logger.debug("Heartbeat rejected: %s", resp.status_code)
             return False
@@ -157,17 +157,17 @@ class Uploader:
 
     # ── Session-end ───────────────────────────────────────────────────────────
 
-    def send_session_end(self, session_id: str, logout_time: str, total_duration: int) -> bool:
+    def send_session_end(self, session_id: str, logout_time: str, total_duration: int, timeout: int = 15) -> bool:
         """Best-effort session-end. Returns True on success."""
         payload = {
             "session_id":     session_id,
             "logout_time":    logout_time,
             "total_duration": total_duration,
         }
-        return self._post(self.session_end_url, payload)
+        return self._post(self.session_end_url, payload, timeout=timeout)
 
     def send_session_end_with_fallback(self, session_id: str, logout_time: str,
-                                       total_duration: int) -> bool:
+                                       total_duration: int, timeout: int = 15) -> bool:
         """
         Send session-end; if it fails, queue to SQLite so it's retried on next boot.
         Returns True only if the network send succeeded.
@@ -177,7 +177,7 @@ class Uploader:
             "logout_time":    logout_time,
             "total_duration": total_duration,
         }
-        ok = self._post(self.session_end_url, payload)
+        ok = self._post(self.session_end_url, payload, timeout=timeout)
         if not ok:
             self._enqueue_session_end(session_id, logout_time, total_duration)
         return ok

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Monitor, Eye, EyeOff, Loader2 } from "lucide-react";
-import { COLLEGE } from "../data/mockData";
+import { COLLEGE } from "../data/collegeConfig";
 
 export default function LoginPage() {
   const { login } = useAuth();

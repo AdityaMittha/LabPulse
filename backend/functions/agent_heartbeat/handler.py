@@ -34,7 +34,8 @@ def _verify_machine_api_key(machine_id: str, api_key: str) -> bool:
         if not item:
             return False
         stored = item.get("api_key_hash", "")
-        return stored == hashlib.sha256(api_key.encode()).hexdigest()
+        raw_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        return stored == raw_hash or stored == f"sha256:{raw_hash}"
     except Exception:
         return False
 

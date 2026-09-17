@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus, Trash2, Upload, Download, FileSpreadsheet,
-  CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, X, ArrowRight
+  CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, X, ArrowRight, Pencil
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageWrapper } from "../components/Shared";
-import { fetchLabs, fetchTimetable, addTimetableSlot, deleteTimetableSlot } from "../api/apiClient";
-import { LAB_SLOT_PRESETS } from "../data/mockData";
+import { fetchLabs, fetchTimetable, addTimetableSlot, updateTimetableSlot, deleteTimetableSlot } from "../api/apiClient";
+import { LAB_SLOT_PRESETS } from "../data/collegeConfig";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const YEARS = ["FY", "SY", "TY", "BE"];
@@ -43,6 +43,8 @@ export default function AdminTimetablePage() {
   const [error,       setError]       = useState(null);
   const [showAdd,     setShowAdd]     = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
+  const [editSlot,    setEditSlot]    = useState(null);  // slot being edited
+  const [editForm,    setEditForm]    = useState({});
 
   // CSV Import State
   const [showCsvModal,      setShowCsvModal]      = useState(false);
@@ -164,6 +166,51 @@ export default function AdminTimetablePage() {
       setSlots(prev => prev.filter(s => s.slot_id !== slotId));
     } catch (err) {
       alert("Failed to delete slot: " + err.message);
+    }
+  };
+
+  const openEdit = (slot) => {
+    setEditSlot(slot);
+    setEditForm({
+      end_time:      slot.end_time || "",
+      year:          normalizeYear(slot.year || "BE"),
+      course_code:   slot.course_code || "",
+      faculty_name:  slot.faculty_name || "",
+      student_group: slot.student_group || "",
+      expected_count: String(slot.expected_count || 25),
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (
+      !editForm.course_code.trim() ||
+      !editForm.faculty_name.trim() ||
+      !editForm.student_group.trim() ||
+      !editForm.end_time
+    ) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = {
+        slot_id:       editSlot.slot_id,
+        end_time:      editForm.end_time,
+        year:          normalizeYear(editForm.year || "BE"),
+        course_code:   editForm.course_code.trim(),
+        faculty_name:  editForm.faculty_name.trim(),
+        student_group: editForm.student_group.trim(),
+        expected_count: parseInt(editForm.expected_count) || 25,
+      };
+      await updateTimetableSlot(payload);
+      setSlots(prev => prev.map(s =>
+        s.slot_id === editSlot.slot_id ? { ...s, ...payload } : s
+      ));
+      setEditSlot(null);
+    } catch (err) {
+      alert("Failed to update slot: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -521,13 +568,22 @@ export default function AdminTimetablePage() {
                         </span>
                         <span>{slot.expected_count} seats</span>
                       </div>
-                      <button
-                        onClick={() => handleDelete(slot.slot_id)}
-                        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                        title="Delete slot"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 flex gap-0.5">
+                        <button
+                          onClick={() => openEdit(slot)}
+                          className="p-1 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-all"
+                          title="Edit slot"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(slot.slot_id)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                          title="Delete slot"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -630,6 +686,107 @@ export default function AdminTimetablePage() {
                 }
               >
                 {submitting ? "Adding…" : "Add Slot"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Slot Modal */}
+      {editSlot && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Edit Timetable Slot</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {editSlot.day_of_week} &nbsp;·&nbsp; {editSlot.start_time} – {editForm.end_time || editSlot.end_time} &nbsp;·&nbsp; {editSlot.lab_id}
+                </p>
+              </div>
+              <button onClick={() => setEditSlot(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* End Time */}
+              <div>
+                <label className="form-label">End Time <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={editForm.end_time}
+                  onChange={e => setEditForm(f => ({ ...f, end_time: e.target.value }))}
+                />
+              </div>
+              {/* Year */}
+              <div>
+                <label className="form-label">Academic Year / Batch <span className="text-red-500 font-bold ml-1">*</span></label>
+                <select
+                  className="form-select"
+                  value={editForm.year}
+                  onChange={e => setEditForm(f => ({ ...f, year: e.target.value }))}
+                >
+                  {YEARS.map(y => <option key={y} value={y}>{YEAR_LABELS[y]}</option>)}
+                </select>
+              </div>
+              {/* Course */}
+              <div className="col-span-2">
+                <label className="form-label">Course Code / Subject <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input
+                  className="form-input"
+                  placeholder="e.g. CS301-DS Lab"
+                  value={editForm.course_code}
+                  onChange={e => setEditForm(f => ({ ...f, course_code: e.target.value }))}
+                />
+              </div>
+              {/* Faculty */}
+              <div className="col-span-2">
+                <label className="form-label">Faculty Name <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input
+                  className="form-input"
+                  placeholder="e.g. Dr. S. K. Sharma"
+                  value={editForm.faculty_name}
+                  onChange={e => setEditForm(f => ({ ...f, faculty_name: e.target.value }))}
+                />
+              </div>
+              {/* Student Group */}
+              <div>
+                <label className="form-label">Student Group <span className="text-red-500 font-bold ml-1">*</span></label>
+                <input
+                  className="form-input"
+                  placeholder="e.g. CSE-B1"
+                  value={editForm.student_group}
+                  onChange={e => setEditForm(f => ({ ...f, student_group: e.target.value }))}
+                />
+              </div>
+              {/* Expected Count */}
+              <div>
+                <label className="form-label">Expected Students</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-input"
+                  value={editForm.expected_count}
+                  onChange={e => setEditForm(f => ({ ...f, expected_count: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-5 pt-3 border-t border-slate-100">
+              <button className="btn-secondary" onClick={() => setEditSlot(null)} disabled={submitting}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={handleEditSave}
+                disabled={
+                  !editForm.course_code.trim() ||
+                  !editForm.faculty_name.trim() ||
+                  !editForm.student_group.trim() ||
+                  !editForm.end_time ||
+                  submitting
+                }
+              >
+                {submitting ? "Saving…" : "Save Changes"}
               </button>
             </div>
           </div>

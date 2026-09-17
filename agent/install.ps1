@@ -53,7 +53,11 @@ if ($IsBinary) {
     }
 
     # Copy src files
-    Copy-Item ".\src" -Destination "$InstallDir\src" -Recurse -Force
+    $SourceSrc = (Resolve-Path ".\src").Path
+    $DestinationSrc = [System.IO.Path]::GetFullPath((Join-Path $InstallDir "src"))
+    if ($SourceSrc.TrimEnd("\") -ne $DestinationSrc.TrimEnd("\")) {
+        Copy-Item ".\src" -Destination "$InstallDir\src" -Recurse -Force
+    }
     if (Test-Path ".\requirements.txt") {
         Copy-Item ".\requirements.txt" -Destination "$InstallDir\requirements.txt" -Force
     }
@@ -100,7 +104,7 @@ if (Test-Path $TargetConfig) {
             Write-Host "      Updated config.json with specified machine/lab parameters." -ForegroundColor Green
         }
     } catch {
-        Write-Warning "Could not parse or update $TargetConfig: $_"
+        Write-Warning "Could not parse or update ${TargetConfig}: $_"
     }
 }
 
@@ -122,7 +126,8 @@ $Settings = New-ScheduledTaskSettingsSet `
     -RestartInterval (New-TimeSpan -Minutes 1) `
     -MultipleInstances IgnoreNew
 
-$Principal = New-ScheduledTaskPrincipal -UserId "BUILTIN\Users" -LogonType Interactive -RunLevel Limited
+$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$Principal = New-ScheduledTaskPrincipal -UserId $CurrentUser -LogonType Interactive -RunLevel Limited
 
 Register-ScheduledTask `
     -TaskName $TaskName `
@@ -138,14 +143,17 @@ $ShutdownTaskName = "LabPulse-Shutdown"
 Unregister-ScheduledTask -TaskName $ShutdownTaskName -Confirm:$false -ErrorAction SilentlyContinue
 
 try {
+    $PythonExe = Join-Path $InstallDir "venv\Scripts\python.exe"
+    $MainPy = Join-Path $InstallDir "src\main.py"
+    $ShutdownCmd = "`"$PythonExe`" `"$MainPy`" --shutdown-sync"
+
     $schArgs = @(
         "/create",
-        "/tn", "`"$ShutdownTaskName`"",
+        "/tn", $ShutdownTaskName,
         "/tr", $ShutdownCmd,
         "/sc", "ONEVENT",
         "/ec", "System",
-        "/mo", "*[System[Provider[@Name='USER32'] and (EventID=1074)]]",
-        "/ru", "SYSTEM",
+        "/mo", "*[System[(EventID=1074)]]",
         "/f"
     )
     $proc = Start-Process -FilePath "schtasks.exe" -ArgumentList $schArgs -Wait -PassThru -NoNewWindow

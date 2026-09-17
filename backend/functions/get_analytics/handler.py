@@ -6,6 +6,7 @@ Supports filters: lab_id, machine_id, student_id, date, date_from, date_to, slot
 """
 import json
 import os
+from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
@@ -18,6 +19,12 @@ app_usage_table         = dynamodb.Table(f"{TABLE_PREFIX}-AppUsage")
 browser_activity_table  = dynamodb.Table(f"{TABLE_PREFIX}-BrowserActivity")
 
 
+def _json_default(obj):
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    return str(obj)
+
+
 def _cors(body, code=200):
     return {
         "statusCode": code,
@@ -25,13 +32,13 @@ def _cors(body, code=200):
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": os.environ.get("ALLOWED_ORIGIN", "*"),
         },
-        "body": json.dumps(body, default=str),
+        "body": json.dumps(body, default=_json_default),
     }
 
 
 def lambda_handler(event, context):
     qs = event.get("queryStringParameters") or {}
-    path = event.get("rawPath", "")
+    path = event.get("rawPath") or event.get("path") or event.get("resource") or ""
 
     if "/compliance" in path:
         return _get_compliance(qs)
@@ -118,7 +125,51 @@ def _get_usage(qs: dict):
                  (not date_from or i.get("date","") >= date_from) and
                  (not date_to   or i.get("date","") <= date_to)]
 
+    _attach_app_usages(items)
+
     return _cors({"sessions": items, "count": len(items)})
+
+
+def _fetch_apps_for_session(sid: str) -> list:
+    if not sid:
+        return []
+    try:
+        resp = app_usage_table.query(
+            IndexName="by_session",
+            KeyConditionExpression=Key("session_id").eq(sid),
+        )
+        return [
+            {
+                "app_name": a.get("app_name", ""),
+                "active_duration": int(a.get("active_duration", 0)),
+                "open_count": int(a.get("open_count", 0)),
+            }
+            for a in resp.get("Items", [])
+        ]
+    except Exception:
+        return []
+
+
+def _attach_app_usages(sessions: list):
+    """Attach app_usages list to each session in parallel."""
+    if not sessions:
+        return
+    import concurrent.futures
+    targets = [s for s in sessions if "app_usages" not in s]
+    if not targets:
+        return
+    max_workers = min(10, len(targets))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_session = {
+            executor.submit(_fetch_apps_for_session, s.get("session_id")): s
+            for s in targets
+        }
+        for future in concurrent.futures.as_completed(future_to_session):
+            s = future_to_session[future]
+            try:
+                s["app_usages"] = future.result()
+            except Exception:
+                s["app_usages"] = []
 
 
 def _get_compliance(qs: dict):
@@ -141,12 +192,19 @@ def _get_compliance(qs: dict):
     compliant     = sum(1 for i in items if i.get("compliance_status") == "compliant")
     partial       = sum(1 for i in items if i.get("compliance_status") == "partial")
     non_compliant = sum(1 for i in items if i.get("compliance_status") == "non_compliant")
+    open_access   = sum(1 for i in items if i.get("compliance_status") in ("open_access", "no_slot"))
+    pending       = sum(1 for i in items if i.get("compliance_status") == "pending" or not i.get("logout_time"))
+
+    # Evaluated sessions are completed scheduled sessions
+    evaluated = compliant + partial + non_compliant
+    compliance_pct = round((compliant / evaluated) * 100) if evaluated > 0 else (100 if len(items) > 0 else 0)
 
     return _cors({
         "lab_id": lab_id, "date": date, "slot": slot,
         "total": len(items),
         "compliant": compliant, "partial": partial, "non_compliant": non_compliant,
-        "compliance_pct": round((compliant / len(items)) * 100) if items else 0,
+        "open_access": open_access, "pending": pending,
+        "compliance_pct": compliance_pct,
         "sessions": items,
     })
 
@@ -218,12 +276,17 @@ def _get_browser(qs: dict):
             entry["page_log"] = []
         results.append(entry)
 
+    IGNORED_DOMAINS = {
+        "new-tab", "browser-tab", "newtab", "about:blank", "about", "chrome",
+        "edge", "extensions", "settings", "localhost", "127.0.0.1", ""
+    }
+
     # Aggregate top sites across all returned activity records
     site_totals = {}
     for r in results:
         for site in r.get("sites", []):
-            domain = site.get("domain", "")
-            if domain:
+            domain = (site.get("domain") or "").strip().lower()
+            if domain and domain not in IGNORED_DOMAINS and not domain.startswith("chrome-") and not domain.startswith("edge-"):
                 if domain not in site_totals:
                     site_totals[domain] = {"domain": domain, "active_duration": 0, "visit_count": 0}
                 site_totals[domain]["active_duration"] += site.get("active_duration", 0)

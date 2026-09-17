@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FlaskConical, Cpu, Users, TrendingUp, Plus } from "lucide-react";
-import { todayStr } from "../data/mockData";
+import { todayStr } from "../data/collegeConfig";
 import { StatCard, UtilBar, PageWrapper, SectionHeading } from "../components/Shared";
 import { fetchUsage, fetchMachines, fetchLabs } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
