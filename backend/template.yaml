@@ -476,6 +476,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /admin/timetable
             Method: POST
+        TimetablePut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/timetable
+            Method: PUT
         TimetableDelete:
           Type: HttpApi
           Properties:

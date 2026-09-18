@@ -52,7 +52,7 @@ if ($IsBinary) {
         exit 1
     }
 
-    # Copy src files
+    # Copy src and sync utility files
     $SourceSrc = (Resolve-Path ".\src").Path
     $DestinationSrc = [System.IO.Path]::GetFullPath((Join-Path $InstallDir "src"))
     if ($SourceSrc.TrimEnd("\") -ne $DestinationSrc.TrimEnd("\")) {
@@ -60,6 +60,11 @@ if ($IsBinary) {
     }
     if (Test-Path ".\requirements.txt") {
         Copy-Item ".\requirements.txt" -Destination "$InstallDir\requirements.txt" -Force
+    }
+    foreach ($fn in @("send_now.py", "sync.bat", "sync.ps1", "uninstall.ps1")) {
+        if (Test-Path ".\$fn") {
+            Copy-Item ".\$fn" -Destination "$InstallDir\$fn" -Force
+        }
     }
 
     # Set up Virtual Environment in InstallDir
@@ -81,9 +86,13 @@ if ($IsBinary) {
 # 4. Configure Machine Settings (config.json)
 Write-Host "[3/5] Configuring agent settings..." -ForegroundColor Yellow
 $TargetConfig = Join-Path $InstallDir "config.json"
+$BackupConfig = "$env:TEMP\labpulse_config_backup.json"
 
 if (Test-Path $ConfigFile) {
     Copy-Item $ConfigFile -Destination $TargetConfig -Force
+} elseif (!(Test-Path $TargetConfig) -and (Test-Path $BackupConfig)) {
+    Write-Host "      Restoring saved configuration from previous installation..." -ForegroundColor Green
+    Copy-Item $BackupConfig -Destination $TargetConfig -Force
 } elseif (!(Test-Path $TargetConfig)) {
     # If sample exists, copy sample
     if (Test-Path ".\config.json.example") {
@@ -174,6 +183,13 @@ Write-Host "Installation Directory : $InstallDir"
 Write-Host "Configuration File     : $InstallDir\config.json"
 Write-Host "Startup Task           : $TaskName (Triggers lock screen on user logon)"
 Write-Host "Shutdown Task          : $ShutdownTaskName (Syncs sessions on PC shutdown)"
+Write-Host "Manual Cloud Sync (Single Command):" -ForegroundColor Yellow
+Write-Host "  CMD / Run box    :  $InstallDir\sync.bat" -ForegroundColor White
+Write-Host "  PowerShell       :  & '$InstallDir\sync.ps1'" -ForegroundColor White
+Write-Host "  Python direct    :  $InstallDir\venv\Scripts\python.exe $InstallDir\send_now.py" -ForegroundColor White
+Write-Host ""
+Write-Host "To Uninstall Agent:" -ForegroundColor Yellow
+Write-Host "  Run: powershell -ExecutionPolicy Bypass -File $InstallDir\uninstall.ps1" -ForegroundColor White
 Write-Host ""
 Write-Host "Verification Checklist:" -ForegroundColor Cyan
 Write-Host "1. Ensure machine_id and api_key in $InstallDir\config.json match Admin -> Machines."

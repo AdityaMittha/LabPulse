@@ -61,9 +61,9 @@ from offline_store import (
 
 def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
     """
-    Display an always-on-top login window asking for PNR No. and password.
-    Returns AuthResult.  The window cannot be closed without entering credentials
-    or exhausting attempts.
+    Display a full-screen, unminimizeable, always-on-top student login kiosk window.
+    Returns AuthResult. The student cannot minimize, bypass, or close the window
+    until entering valid credentials or exhausting attempts.
     """
     import tkinter as tk
     from tkinter import ttk
@@ -71,24 +71,36 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
     result_holder: list[AuthResult] = []
 
     root = tk.Tk()
-    root.title("LabPulse — Lab Session Sign-in")
-    root.geometry("420x310")
-    root.resizable(False, False)
-    root.attributes("-topmost", True)
-    root.protocol("WM_DELETE_WINDOW", lambda: None)   # prevent close button
-    root.configure(bg="#F8FAFC")
+    root.title("LabPulse — Student Lab Session Sign-in")
 
-    # Centre on screen
-    root.update_idletasks()
-    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry(f"420x310+{(sw-420)//2}+{(sh-310)//2}")
+    # 1. True Full-Screen, Always-on-Top, and Unminimizeable
+    root.attributes("-fullscreen", True)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+    root.configure(bg="#0F172A")  # Modern deep slate canvas
+
+    # 2. Block window close / minimize / taskbar switching
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    def enforce_kiosk_focus(event=None):
+        try:
+            root.attributes("-fullscreen", True)
+            root.attributes("-topmost", True)
+            root.lift()
+            root.focus_force()
+        except Exception:
+            pass
+
+    root.bind("<FocusOut>", lambda e: root.after(60, enforce_kiosk_focus))
+    root.bind("<Escape>",   lambda e: "break")       # Disable Esc exiting fullscreen
+    root.bind("<Alt-F4>",   lambda e: "break")       # Block Alt+F4
 
     # ── Style ──────────────────────────────────────────────────────────────────
     style = ttk.Style(root)
     style.theme_use("clam")
     style.configure("Primary.TButton",
                     background="#2563EB", foreground="white",
-                    font=("Segoe UI", 10, "bold"), padding=9,
+                    font=("Segoe UI", 11, "bold"), padding=11,
                     relief="flat", borderwidth=0)
     style.map("Primary.TButton",
               background=[("active", "#1D4ED8"), ("disabled", "#93C5FD")])
@@ -96,50 +108,61 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
     attempts  = [0]
     error_var = tk.StringVar()
 
-    # ── Header ─────────────────────────────────────────────────────────────────
-    hdr = tk.Frame(root, bg="#2563EB", height=68)
+    # ── Centered Card on Fullscreen Canvas ─────────────────────────────────────
+    center_container = tk.Frame(root, bg="#0F172A")
+    center_container.place(relx=0.5, rely=0.5, anchor="center")
+
+    # Card outer border / shadow outline
+    card_border = tk.Frame(center_container, bg="#334155", padx=1, pady=1)
+    card_border.pack()
+
+    card = tk.Frame(card_border, bg="#FFFFFF", width=480, padx=0, pady=0)
+    card.pack()
+
+    # ── Card Header ────────────────────────────────────────────────────────────
+    hdr = tk.Frame(card, bg="#1E40AF", height=88)
     hdr.pack(fill="x")
-    tk.Label(hdr, text="🎓  Walchand Institute of Technology",
-             bg="#2563EB", fg="white",
-             font=("Segoe UI", 11, "bold")).pack(pady=(10, 2))
-    tk.Label(hdr, text="Lab Session Sign-in  •  LabPulse",
-             bg="#2563EB", fg="#BFDBFE",
-             font=("Segoe UI", 9)).pack()
+    tk.Label(hdr, text="🎓  Walchand Institute of Technology, Solapur",
+             bg="#1E40AF", fg="white",
+             font=("Segoe UI", 12, "bold")).pack(pady=(14, 2))
+    tk.Label(hdr, text="LabPulse • Student Workstation Kiosk",
+             bg="#1E40AF", fg="#BFDBFE",
+             font=("Segoe UI", 9)).pack(pady=(0, 10))
 
     # Machine info strip
-    info = tk.Frame(root, bg="#EFF6FF", pady=4)
+    info = tk.Frame(card, bg="#EFF6FF", pady=6, padx=16)
     info.pack(fill="x")
     tk.Label(info,
-             text=f"Machine: {config.get('machine_id','?')}   |   Lab: {config.get('lab_name', config.get('lab_id','?'))}",
+             text=f"🖥️ PC: {config.get('machine_id','?')}   •   🏢 Lab: {config.get('lab_name', config.get('lab_id','?'))}",
              bg="#EFF6FF", fg="#1E40AF",
-             font=("Segoe UI", 8)).pack()
+             font=("Segoe UI", 9, "bold")).pack()
 
     # ── Form ───────────────────────────────────────────────────────────────────
-    form = tk.Frame(root, bg="#F8FAFC", padx=32, pady=18)
+    form = tk.Frame(card, bg="#FFFFFF", padx=36, pady=22)
     form.pack(fill="both", expand=True)
 
-    tk.Label(form, text="Student ID / PNR No.",
-             bg="#F8FAFC", fg="#0F172A",
-             font=("Segoe UI", 9, "bold"), anchor="w").grid(row=0, column=0, sticky="w")
+    tk.Label(form, text="Student ID / PNR Number",
+             bg="#FFFFFF", fg="#0F172A",
+             font=("Segoe UI", 10, "bold"), anchor="w").grid(row=0, column=0, sticky="w")
     pnr_var   = tk.StringVar()
-    pnr_entry = ttk.Entry(form, textvariable=pnr_var, width=34,
-                          font=("Courier New", 10))
-    pnr_entry.grid(row=1, column=0, pady=(3, 12), sticky="ew")
+    pnr_entry = ttk.Entry(form, textvariable=pnr_var, width=32,
+                          font=("Segoe UI", 11))
+    pnr_entry.grid(row=1, column=0, pady=(4, 14), sticky="ew")
 
     tk.Label(form, text="Password",
-             bg="#F8FAFC", fg="#0F172A",
-             font=("Segoe UI", 9, "bold"), anchor="w").grid(row=2, column=0, sticky="w")
+             bg="#FFFFFF", fg="#0F172A",
+             font=("Segoe UI", 10, "bold"), anchor="w").grid(row=2, column=0, sticky="w")
     pw_var   = tk.StringVar()
-    pw_entry = ttk.Entry(form, textvariable=pw_var, show="•", width=34,
-                         font=("Courier New", 10))
-    pw_entry.grid(row=3, column=0, pady=(3, 12), sticky="ew")
+    pw_entry = ttk.Entry(form, textvariable=pw_var, show="•", width=32,
+                         font=("Segoe UI", 11))
+    pw_entry.grid(row=3, column=0, pady=(4, 14), sticky="ew")
 
     form.columnconfigure(0, weight=1)
 
     err_lbl = tk.Label(form, textvariable=error_var,
-                       bg="#F8FAFC", fg="#DC2626",
-                       font=("Segoe UI", 9), wraplength=340, anchor="w")
-    err_lbl.grid(row=4, column=0, sticky="w")
+                       bg="#FFFFFF", fg="#DC2626",
+                       font=("Segoe UI", 9), wraplength=400, anchor="w")
+    err_lbl.grid(row=4, column=0, pady=(0, 6), sticky="w")
 
     def attempt_login():
         pnr      = pnr_var.get().strip()
@@ -148,7 +171,7 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
             error_var.set("Please enter both PNR number and password.")
             return
 
-        btn.configure(state="disabled", text="Verifying…")
+        btn.configure(state="disabled", text="Verifying Credentials…")
         root.update()
 
         auth = validate_pnr(pnr, password, config)
@@ -171,7 +194,7 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
         attempts[0] += 1
         remaining = max_attempts - attempts[0]
         if remaining <= 0:
-            error_var.set("Too many failed attempts. Session recorded as unidentified.")
+            error_var.set("Too many failed attempts. Workstation unlocking as unidentified.")
             result_holder.append(AuthResult(
                 success=False,
                 student_id="UNIDENTIFIED",
@@ -180,18 +203,26 @@ def show_pnr_login(config: dict, max_attempts: int = 3) -> AuthResult:
             root.after(2000, root.destroy)
         else:
             error_var.set(f"{auth.error}  ({remaining} attempt{'s' if remaining > 1 else ''} left)")
-            btn.configure(state="normal", text="Start Session")
+            btn.configure(state="normal", text="Unlock & Start Lab Session")
             pw_var.set("")
             pw_entry.focus()
 
-    btn = ttk.Button(form, text="Start Session",
+    btn = ttk.Button(form, text="Unlock & Start Lab Session",
                      style="Primary.TButton", command=attempt_login)
-    btn.grid(row=5, column=0, pady=(6, 0), sticky="ew")
+    btn.grid(row=5, column=0, pady=(8, 4), sticky="ew")
+
+    # Security & compliance badge
+    footer_notice = tk.Label(
+        card,
+        text="🔒 Workstation activity is automatically logged for attendance & compliance.",
+        bg="#F8FAFC", fg="#64748B", font=("Segoe UI", 8), pady=8
+    )
+    footer_notice.pack(fill="x")
 
     pnr_entry.focus()
-    pw_entry.bind("<Return>", lambda _: attempt_login())
-    btn.bind("<Return>",      lambda _: attempt_login())
-    root.bind("<Return>",     lambda _: attempt_login())
+    pnr_entry.bind("<Return>", lambda _: pw_entry.focus())
+    pw_entry.bind("<Return>",  lambda _: attempt_login())
+    btn.bind("<Return>",       lambda _: attempt_login())
 
     root.mainloop()
 
