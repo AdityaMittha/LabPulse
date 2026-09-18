@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Monitor, Users, CheckCircle2, Activity, Globe, Edit2, Trash2 } from "lucide-react";
+import { Monitor, Users, CheckCircle2, Activity, Globe, Edit2, Trash2, AppWindow } from "lucide-react";
 import { todayStr, formatDuration, COLLEGE_PERIODS, formatTimeIST, getISTMinutes } from "../data/collegeConfig";
 import {
   StatCard, ComplianceBadge, SectionHeading, EmptyState, PageWrapper
@@ -157,6 +157,31 @@ export default function LabDetailPage({ globalDate }) {
   }, [labInfo, isAdmin, user]);
 
   const daySessions = sessionsData;
+
+  // Aggregate Top Applications visited/used in this lab for selected date
+  const topApps = useMemo(() => {
+    const map = {};
+    daySessions.forEach(s => {
+      (s.app_usages || []).forEach(a => {
+        const rawName = (a.app_name || "").trim();
+        if (!rawName || rawName.toLowerCase() === "unknown" || rawName.toLowerCase() === "desktop") return;
+        if (!map[rawName]) {
+          map[rawName] = { dur: 0, open_count: 0 };
+        }
+        map[rawName].dur += Number(a.active_duration || 0);
+        map[rawName].open_count += Number(a.open_count || 1);
+      });
+    });
+    return Object.entries(map)
+      .map(([rawName, stats]) => ({
+        name: rawName.replace(/\.exe$/i, ""),
+        rawName,
+        dur: stats.dur,
+        open_count: stats.open_count,
+      }))
+      .sort((a, b) => b.dur - a.dur || b.open_count - a.open_count)
+      .slice(0, 8);
+  }, [daySessions]);
 
   const hourlyData = useMemo(() => {
     return COLLEGE_PERIODS.map(period => {
@@ -368,32 +393,70 @@ export default function LabDetailPage({ globalDate }) {
         </div>
       </div>
 
-      {/* Top Websites */}
-      <div className="card card-body mb-6">
-        <SectionHeading title={`Top Websites Visited — ${selectedDate}`} />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {topSitesData.length === 0
-            ? <p className="text-sm text-slate-400 col-span-full py-4 text-center">No browser activity recorded for this date.</p>
-            : topSitesData.map((site, i) => {
-              const maxDur = topSitesData[0].active_duration || 1;
-              return (
-                <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
-                  <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
-                  <Globe className="w-4 h-4 text-slate-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{site.domain}</p>
-                    <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
-                      <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+      {/* Top Applications & Top Websites */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Top Applications */}
+        <div className="card card-body">
+          <SectionHeading title={`Top Applications — ${selectedDate}`} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {topApps.length === 0
+              ? <p className="text-sm text-slate-400 col-span-full py-6 text-center">No application activity recorded for this date.</p>
+              : topApps.slice(0, 8).map((app, i) => {
+                const maxDur = topApps[0].dur || 1;
+                return (
+                  <div key={app.rawName} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
+                    <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
+                    <AppWindow className="w-4 h-4 text-primary-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-medium text-slate-700 truncate" title={app.rawName}>{app.name}</p>
+                        {app.open_count > 0 && (
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                            {app.open_count} {app.open_count === 1 ? "visit" : "visits"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+                        <div className="h-full bg-primary-600 rounded-full" style={{ width: `${(app.dur / maxDur) * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-mono text-slate-600">{formatDuration(app.dur)}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs font-mono text-slate-600">{formatDuration(site.active_duration)}</p>
-                    <p className="text-[10px] text-slate-400">{site.visit_count} visits</p>
+                );
+              })
+            }
+          </div>
+        </div>
+
+        {/* Top Websites */}
+        <div className="card card-body">
+          <SectionHeading title={`Top Websites Visited — ${selectedDate}`} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {topSitesData.length === 0
+              ? <p className="text-sm text-slate-400 col-span-full py-6 text-center">No browser activity recorded for this date.</p>
+              : topSitesData.map((site, i) => {
+                const maxDur = topSitesData[0].active_duration || 1;
+                return (
+                  <div key={site.domain} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50/50">
+                    <span className="text-xs font-medium text-slate-400 w-4 text-center">{i + 1}</span>
+                    <Globe className="w-4 h-4 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">{site.domain}</p>
+                      <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+                        <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(site.active_duration / maxDur) * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-mono text-slate-600">{formatDuration(site.active_duration)}</p>
+                      <p className="text-[10px] text-slate-400">{site.visit_count} visits</p>
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          }
+                );
+              })
+            }
+          </div>
         </div>
       </div>
 
